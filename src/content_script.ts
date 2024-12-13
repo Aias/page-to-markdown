@@ -1,4 +1,6 @@
 import TurndownService from "turndown";
+import * as TurndownPluginGfm from "turndown-plugin-gfm";
+
 import { domainConfigs } from "./rules";
 
 declare global {
@@ -49,6 +51,9 @@ window.convertPageToMarkdown = async function () {
     headingStyle: "atx",
     codeBlockStyle: "fenced",
   });
+
+  // Enable GitHub Flavored Markdown tables
+  turndownService.use(TurndownPluginGfm.gfm);
 
   // Custom rule for code blocks
   turndownService.addRule("codeBlocks", {
@@ -120,8 +125,10 @@ async function copyToClipboard(text: string): Promise<void> {
   try {
     // Try the modern clipboard API first
     await navigator.clipboard.writeText(text);
+    console.log("Copied to clipboard");
   } catch (err) {
     // Fallback to execCommand
+    console.log("Fallback to execCommand");
     const textarea = document.createElement("textarea");
     textarea.value = text;
     document.body.appendChild(textarea);

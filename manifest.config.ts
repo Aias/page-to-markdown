@@ -11,7 +11,7 @@ export default defineManifest({
   },
   background: {
     service_worker: "src/background.ts",
-    type: "module", // required for mv3 background in modules
+    type: "module",
   },
   content_scripts: [
     {
