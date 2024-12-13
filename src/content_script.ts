@@ -102,14 +102,17 @@ ${toc}
 
 function showSuccessOverlay() {
   const overlay = document.createElement("div");
-  overlay.innerText = "Markdown copied to clipboard!";
+  overlay.innerText = "Markdown copied.";
   Object.assign(overlay.style, {
     position: "fixed",
-    top: "1rem",
-    right: "1rem",
-    padding: "1rem",
-    backgroundColor: "#4CAF50",
+    top: "0.5em",
+    right: "0.5em",
+    padding: "0.5em 1em",
+    backgroundColor: "#0e5a27",
     color: "#fff",
+    fontSize: "14px",
+    fontFamily: "system-ui, sans-serif",
+    fontWeight: "500",
     borderRadius: "4px",
     zIndex: "999999",
   } as CSSStyleDeclaration);
