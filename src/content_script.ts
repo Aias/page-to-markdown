@@ -1,5 +1,5 @@
 import TurndownService from "turndown";
-import { domainConfigs } from "./domainConfig";
+import { domainConfigs } from "./rules";
 
 declare global {
   interface Window {
@@ -88,7 +88,7 @@ ${toc}
   const finalOutput = frontMatter + markdownContent;
 
   try {
-    await navigator.clipboard.writeText(finalOutput);
+    await copyToClipboard(finalOutput);
     showSuccessOverlay();
   } catch (err) {
     console.error("Failed to copy markdown: ", err);
@@ -114,4 +114,23 @@ function showSuccessOverlay() {
   setTimeout(() => {
     document.body.removeChild(overlay);
   }, 2000);
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    // Try the modern clipboard API first
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    // Fallback to execCommand
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      // execCommand is deprecated but we're using it as a fallback.
+      document.execCommand("copy");
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
 }
