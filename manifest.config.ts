@@ -5,7 +5,7 @@ export default defineManifest({
   name: "Page to Markdown LLM Converter",
   version: "1.0.0",
   description: "Converts the current page to Markdown suitable for LLM input.",
-  permissions: ["activeTab", "scripting", "clipboardWrite"],
+  permissions: ["activeTab", "scripting", "clipboardWrite", "contextMenus", "storage"],
   action: {
     default_title: "Convert page to Markdown",
   },
@@ -20,4 +20,14 @@ export default defineManifest({
       run_at: "document_idle",
     },
   ],
+  commands: {
+    "convert-to-markdown": {
+      suggested_key: {
+        default: "Ctrl+Shift+M",
+        mac: "Command+Shift+M"
+      },
+      description: "Convert current page to Markdown"
+    }
+  },
+  options_page: "src/options.html"
 });
