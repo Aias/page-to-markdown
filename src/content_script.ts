@@ -103,8 +103,7 @@ function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 		if (img.src) {
 			try {
 				img.src = new URL(img.src, location.href).href;
-			} catch (e) {
-			}
+			} catch (e) {}
 		}
 	});
 }
@@ -247,8 +246,7 @@ function normalizeLinks(el: HTMLElement): void {
 
 			paramsToDelete.forEach((key) => url.searchParams.delete(key));
 			anchor.setAttribute('href', url.toString());
-		} catch (err) {
-		}
+		} catch (err) {}
 	});
 }
 
@@ -288,7 +286,9 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
 		const panel = figure.querySelector('[data-language]') as HTMLElement | null;
 		if (panel) {
 			const panelLang =
-				panel.getAttribute('data-language') || panel.dataset.language || panel.getAttribute('data-lang');
+				panel.getAttribute('data-language') ||
+				panel.dataset.language ||
+				panel.getAttribute('data-lang');
 			if (panelLang && !preElement.dataset.language) {
 				preElement.dataset.language = panelLang;
 			}
@@ -307,14 +307,18 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
 			}
 		}
 
-		figure.querySelectorAll('button, .CodeBlockPanel, .ScrollAreaScrollbar').forEach((node) => node.remove());
+		figure
+			.querySelectorAll('button, .CodeBlockPanel, .ScrollAreaScrollbar')
+			.forEach((node) => node.remove());
 	});
 
 	el.querySelectorAll('[role="figure"]').forEach((figure) => {
 		if (!figure.querySelector('pre')) {
 			return;
 		}
-		figure.querySelectorAll('button, [role="tablist"], [role="combobox"]').forEach((node) => node.remove());
+		figure
+			.querySelectorAll('button, [role="tablist"], [role="combobox"]')
+			.forEach((node) => node.remove());
 	});
 }
 
@@ -323,7 +327,9 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
  * @returns The sanitized Markdown body or null when unavailable.
  */
 async function fetchCanonicalMarkdown(): Promise<string | null> {
-	const link = document.querySelector('a[rel="alternate"][type="text/markdown"]') as HTMLAnchorElement | null;
+	const link = document.querySelector(
+		'a[rel="alternate"][type="text/markdown"]'
+	) as HTMLAnchorElement | null;
 	if (!link || !link.href) {
 		return null;
 	}
@@ -366,7 +372,10 @@ function stripFrontMatter(markdown: string): { frontMatter: string | null; conte
 	}
 
 	const contentLines = lines.slice(closingIndex + 1);
-	return { frontMatter: lines.slice(0, closingIndex + 1).join('\n'), content: contentLines.join('\n').trim() };
+	return {
+		frontMatter: lines.slice(0, closingIndex + 1).join('\n'),
+		content: contentLines.join('\n').trim(),
+	};
 }
 
 /**
@@ -411,7 +420,11 @@ function firstNonEmpty(values: Array<string | null | undefined>): string | null 
  * @param code - The optional <code> element inside the pre.
  * @param figure - A higher level wrapper that may contain metadata.
  */
-function extractLanguage(pre: HTMLElement, code: HTMLElement | null, figure: HTMLElement | null): string | null {
+function extractLanguage(
+	pre: HTMLElement,
+	code: HTMLElement | null,
+	figure: HTMLElement | null
+): string | null {
 	const candidates: Array<string | null | undefined> = [
 		pre.dataset.language,
 		pre.getAttribute('data-language'),
@@ -845,7 +858,9 @@ window.convertPageToMarkdown = async function () {
 				replacement: (_, node) => {
 					const preElement = node as HTMLElement;
 					const codeElement = preElement.querySelector('code') as HTMLElement | null;
-					const figure = preElement.closest('[data-rehype-pretty-code-figure]') as HTMLElement | null;
+					const figure = preElement.closest(
+						'[data-rehype-pretty-code-figure]'
+					) as HTMLElement | null;
 					const demoContainer = preElement.closest('[data-demo]') as HTMLElement | null;
 
 					const rawCode = codeElement?.textContent || preElement.textContent || '';
@@ -901,7 +916,9 @@ window.convertPageToMarkdown = async function () {
 			const markdownContent = turndownService.turndown(sanitizedHtml);
 			const processedMarkdown = postProcessMarkdown(markdownContent);
 			const footnoteMarkdown = renderFootnotes(turndownService, footnoteDefinitions);
-			bodyContent = footnoteMarkdown ? `${processedMarkdown}\n\n${footnoteMarkdown}` : processedMarkdown;
+			bodyContent = footnoteMarkdown
+				? `${processedMarkdown}\n\n${footnoteMarkdown}`
+				: processedMarkdown;
 		}
 
 		/** Build front matter. */

@@ -3,11 +3,11 @@
  * @listens chrome.runtime#onInstalled
  */
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "convert-to-markdown",
-    title: "Copy page as Markdown",
-    contexts: ["page", "selection"],
-  });
+	chrome.contextMenus.create({
+		id: 'convert-to-markdown',
+		title: 'Copy page as Markdown',
+		contexts: ['page', 'selection'],
+	});
 });
 
 /**
@@ -15,9 +15,9 @@ chrome.runtime.onInstalled.addListener(() => {
  * @listens chrome.contextMenus#onClicked
  */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "convert-to-markdown" && tab?.id) {
-    await executeConversion(tab);
-  }
+	if (info.menuItemId === 'convert-to-markdown' && tab?.id) {
+		await executeConversion(tab);
+	}
 });
 
 /**
@@ -25,9 +25,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
  * @listens chrome.action#onClicked
  */
 chrome.action.onClicked.addListener(async (tab) => {
-  if (tab?.id) {
-    await executeConversion(tab);
-  }
+	if (tab?.id) {
+		await executeConversion(tab);
+	}
 });
 
 /**
@@ -35,23 +35,26 @@ chrome.action.onClicked.addListener(async (tab) => {
  * @listens chrome.runtime#onMessage
  */
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "convert-current-tab") {
-    (async () => {
-      try {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!activeTab) {
-          throw new Error("No active tab");
-        }
-        await executeConversion(activeTab);
-        sendResponse({ ok: true });
-      } catch (error) {
-        console.error("Failed to convert current tab:", error);
-        sendResponse({ ok: false, message: error instanceof Error ? error.message : String(error) });
-      }
-    })();
-    return true;
-  }
-  return undefined;
+	if (message?.type === 'convert-current-tab') {
+		(async () => {
+			try {
+				const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+				if (!activeTab) {
+					throw new Error('No active tab');
+				}
+				await executeConversion(activeTab);
+				sendResponse({ ok: true });
+			} catch (error) {
+				console.error('Failed to convert current tab:', error);
+				sendResponse({
+					ok: false,
+					message: error instanceof Error ? error.message : String(error),
+				});
+			}
+		})();
+		return true;
+	}
+	return undefined;
 });
 
 /**
@@ -59,22 +62,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * @param tab - The tab that should run the Markdown conversion.
  */
 async function executeConversion(tab: chrome.tabs.Tab) {
-  if (!tab.id || !tab.windowId) return;
-  
-  try {
-    await chrome.windows.update(tab.windowId, { focused: true });
-    await chrome.tabs.update(tab.id, { active: true });
-    await new Promise((r) => setTimeout(r, 100));
+	if (!tab.id || !tab.windowId) return;
 
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        window.convertPageToMarkdown && window.convertPageToMarkdown();
-      },
-    });
-  } catch (error) {
-    console.error("Failed to execute conversion:", error);
-  }
+	try {
+		await chrome.windows.update(tab.windowId, { focused: true });
+		await chrome.tabs.update(tab.id, { active: true });
+		await new Promise((r) => setTimeout(r, 100));
+
+		await chrome.scripting.executeScript({
+			target: { tabId: tab.id },
+			func: () => {
+				window.convertPageToMarkdown && window.convertPageToMarkdown();
+			},
+		});
+	} catch (error) {
+		console.error('Failed to execute conversion:', error);
+	}
 }
 
 /**
@@ -82,10 +85,10 @@ async function executeConversion(tab: chrome.tabs.Tab) {
  * @listens chrome.commands#onCommand
  */
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "convert-to-markdown") {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab) {
-      await executeConversion(activeTab);
-    }
-  }
+	if (command === 'convert-to-markdown') {
+		const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+		if (activeTab) {
+			await executeConversion(activeTab);
+		}
+	}
 });
