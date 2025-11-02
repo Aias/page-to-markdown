@@ -9,9 +9,15 @@ A Chrome extension that converts web pages to clean, LLM-friendly Markdown with 
 - **Enhanced Markdown Output**:
   - YAML front matter with metadata (title, URL, author, date)
   - Auto-generated table of contents with heading anchors
+  - Markdown footnotes rendered from `<sup>` references and definitions
   - GitHub Flavored Markdown support (tables, strikethrough, task lists)
   - Code blocks with syntax highlighting
+  - Code fences keep language + filename metadata from Shiki/rehype/prettify-style blocks
+  - High-resolution images resolved from lazy-loaded sources and `<picture>` sets
+  - Embedded audio/video/iframe content summarized as descriptive quotes with source URLs
   - Smart quote and whitespace normalization
+- **Clean Links & Assets**: Resolves relative URLs, strips tracking parameters from anchors, and removes low-value pixels.
+- **Native Markdown Fallback**: When documentation sites publish their own Markdown (`rel="alternate" type="text/markdown"`), the extension fetches and returns that canonical source for perfect fidelity.
 - **Multiple Access Methods**:
   - Extension icon click
   - Right-click context menu
@@ -44,11 +50,11 @@ Access the extension options to add custom rules for specific websites:
 
 ```markdown
 ---
-title: "Article Title"
-source: "https://example.com/article"
-retrieved: "2024-01-01T12:00:00Z"
-author: "Author Name"
-description: "Article description"
+title: 'Article Title'
+source: 'https://example.com/article'
+retrieved: '2024-01-01T12:00:00Z'
+author: 'Author Name'
+description: 'Article description'
 tags: []
 toc: true
 ---

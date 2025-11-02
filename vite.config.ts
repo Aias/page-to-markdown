@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import { crx } from "@crxjs/vite-plugin";
 import manifest from "./manifest.config";
 
 export default defineConfig({
-  plugins: [crx({ manifest })],
+  plugins: [react(), tailwindcss(), crx({ manifest })],
   build: {
     outDir: "dist",
     minify: "esbuild", // Uses esbuild internally for minification

@@ -21,6 +21,26 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "convert-current-tab") {
+    (async () => {
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!activeTab) {
+          throw new Error("No active tab");
+        }
+        await executeConversion(activeTab);
+        sendResponse({ ok: true });
+      } catch (error) {
+        console.error("Failed to convert current tab:", error);
+        sendResponse({ ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+    })();
+    return true;
+  }
+  return undefined;
+});
+
 // Execute the conversion
 async function executeConversion(tab: chrome.tabs.Tab) {
   if (!tab.id || !tab.windowId) return;

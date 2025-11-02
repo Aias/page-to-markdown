@@ -1,25 +1,33 @@
 {
-  "name": "page-to-markdown",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build"
-  },
-  "devDependencies": {
-    "@crxjs/vite-plugin": "2.0.0",
-    "@types/chrome": "^0.0.326",
-    "@types/dompurify": "^3.2.0",
-    "@types/turndown": "^5.0.5",
-    "turndown": "^7.2.0",
-    "turndown-plugin-gfm": "^1.0.2",
-    "typescript": "~5.8.3",
-    "vite": "^6.3.5"
-  },
-  "packageManager": "pnpm@9.15.0+sha512.76e2379760a4328ec4415815bcd6628dee727af3779aaa4c914e3944156c4299921a89f976381ee107d41f12cfa4b66681ca9c718f0668fa0831ed4c6d8ba56c",
-  "dependencies": {
-    "@mozilla/readability": "^0.6.0",
-    "dompurify": "^3.2.6"
-  }
+	"name": "page-to-markdown",
+	"private": true,
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"tsc": "tsc"
+	},
+	"dependencies": {
+		"@base-ui-components/react": "1.0.0-beta.4",
+		"@mozilla/readability": "^0.6.0",
+		"dompurify": "^3.3.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
+	"devDependencies": {
+		"@crxjs/vite-plugin": "2.2.1",
+		"@tailwindcss/vite": "^4.1.16",
+		"@types/chrome": "^0.1.27",
+		"@types/react": "^19.2.2",
+		"@types/react-dom": "^19.2.2",
+		"@types/turndown": "^5.0.6",
+		"@vitejs/plugin-react-swc": "^4.2.0",
+		"tailwindcss": "^4.1.16",
+		"turndown": "^7.2.2",
+		"turndown-plugin-gfm": "^1.0.2",
+		"typescript": "~5.9.3",
+		"vite": "^7.1.12"
+	},
+	"packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd"
 }
