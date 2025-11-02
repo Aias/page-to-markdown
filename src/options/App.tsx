@@ -19,6 +19,10 @@ const emptyForm: FormState = {
 
 type ToastVariant = 'success' | 'error';
 
+/**
+ * Provides a concise toast enqueue helper backed by the shared toast manager.
+ * @returns Function that triggers toast notifications.
+ */
 function useToast() {
 	const manager = Toast.useToastManager();
 
@@ -34,6 +38,10 @@ function useToast() {
 	return notify;
 }
 
+/**
+ * Reads the user's saved domain overrides from Chrome sync storage.
+ * @returns A mapping of domain hostnames to their configuration overrides.
+ */
 async function readCustomConfigs(): Promise<Record<string, DomainConfig>> {
 	try {
 		const result = await chrome.storage.sync.get('domainConfigs');
@@ -44,6 +52,10 @@ async function readCustomConfigs(): Promise<Record<string, DomainConfig>> {
 	}
 }
 
+/**
+ * Deletes the saved override for the supplied domain.
+ * @param domain - Hostname whose configuration should be removed.
+ */
 async function removeCustomConfig(domain: string): Promise<void> {
 	const result = await chrome.storage.sync.get('domainConfigs');
 	const configs = (result.domainConfigs ?? {}) as Record<string, DomainConfig>;
@@ -51,15 +63,25 @@ async function removeCustomConfig(domain: string): Promise<void> {
 	await chrome.storage.sync.set({ domainConfigs: configs });
 }
 
+/**
+ * Drops all stored custom domain overrides from Chrome sync storage.
+ */
 async function resetCustomConfigs(): Promise<void> {
 	await chrome.storage.sync.remove('domainConfigs');
 }
 
+/**
+ * Produces a human-readable summary of selectors configured for removal.
+ * @param remove - Optional list of CSS selectors.
+ */
 function formatRemoveList(remove?: string[]) {
 	if (!remove || remove.length === 0) return '—';
 	return remove.join(', ');
 }
 
+/**
+ * Wraps the options page UI with a toast provider and viewport.
+ */
 export function OptionsApp() {
 	return (
 		<Toast.Provider>
@@ -69,6 +91,9 @@ export function OptionsApp() {
 	);
 }
 
+/**
+ * Primary options page component that manages custom extraction rules state.
+ */
 function OptionsContent() {
 	const [form, setForm] = useState<FormState>(emptyForm);
 	const [customConfigs, setCustomConfigs] = useState<Record<string, DomainConfig>>({});

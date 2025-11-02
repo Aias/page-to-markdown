@@ -3,9 +3,11 @@ export interface DomainConfig {
 	remove?: string[];
 }
 
-// Default domain configurations
+/**
+ * Built-in domain overrides keyed by hostname, providing selectors and optional removal rules.
+ */
 export const defaultDomainConfigs: Record<string, DomainConfig> = {
-	// News sites
+	/** News sites. */
 	'medium.com': {
 		selector: 'article',
 		remove: ['.pw-highlight-menu', '.js-postShareWidget', "[aria-label='responses']"],
@@ -22,7 +24,7 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
 		selector: "[itemprop='text']",
 		remove: ['.js-comment-edit-button', '.timeline-comment-actions'],
 	},
-	// Documentation sites
+	/** Documentation sites. */
 	'docs.microsoft.com': {
 		selector: 'main',
 		remove: ['#feedback-section', '.alert', 'nav'],
@@ -31,17 +33,21 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
 		selector: 'article',
 		remove: ['.prev-next', '.language-menu', '.on-github'],
 	},
-	// General fallback
+	/** General fallback. */
 	'example.com': {
 		selector: 'main',
 		remove: ['nav', 'footer', '.ads-container'],
 	},
 };
 
-// Runtime storage for user customizations
+/**
+ * In-memory cache of the merged default and user-defined domain configurations.
+ */
 let domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
 
-// Load custom configurations from chrome storage
+/**
+ * Hydrates {@link domainConfigs} with user-defined overrides from Chrome sync storage.
+ */
 export async function loadCustomConfigs(): Promise<void> {
 	try {
 		if (typeof chrome !== 'undefined' && chrome.storage) {
@@ -55,7 +61,11 @@ export async function loadCustomConfigs(): Promise<void> {
 	}
 }
 
-// Save custom configuration
+/**
+ * Persists a custom domain configuration and updates the in-memory cache.
+ * @param domain - Hostname associated with the configuration.
+ * @param config - Selector and optional removal rules applied during conversion.
+ */
 export async function saveCustomConfig(domain: string, config: DomainConfig): Promise<void> {
 	try {
 		const result = await chrome.storage.sync.get('domainConfigs');
@@ -68,10 +78,12 @@ export async function saveCustomConfig(domain: string, config: DomainConfig): Pr
 	}
 }
 
-// Get configuration for a domain
+/**
+ * Retrieves the cached configuration for the provided domain.
+ * @param domain - Hostname to look up.
+ */
 export function getDomainConfig(domain: string): DomainConfig | undefined {
 	return domainConfigs[domain];
 }
 
-// Export for backward compatibility
 export { domainConfigs };

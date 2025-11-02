@@ -14,6 +14,9 @@ let containerEl: HTMLElement | null = null;
 let enqueue: ((options: ToastOptions) => void) | null = null;
 const pendingQueue: ToastOptions[] = [];
 
+/**
+ * Attempts to deliver any queued toast notifications once a host is ready.
+ */
 function flushQueue() {
   if (!enqueue) return;
   while (pendingQueue.length > 0) {
@@ -21,6 +24,9 @@ function flushQueue() {
   }
 }
 
+/**
+ * Lazily mounts a React root that renders the toast viewport inside the active document.
+ */
 function ensureHost() {
   if (toastRoot) return;
   containerEl = document.createElement("div");
@@ -43,6 +49,9 @@ function ensureHost() {
   );
 }
 
+/**
+ * React component that bridges the Base UI toast manager to the enqueue helper.
+ */
 function ToastHost() {
   const manager = Toast.useToastManager();
   const { toasts } = manager;
@@ -148,6 +157,10 @@ function ToastHost() {
   );
 }
 
+/**
+ * Enqueues a toast, buffering the request if the host has not been initialised yet.
+ * @param options - Presentation details for the toast notification.
+ */
 function enqueueToast(options: ToastOptions) {
   ensureHost();
   if (enqueue) {
@@ -158,6 +171,10 @@ function enqueueToast(options: ToastOptions) {
   }
 }
 
+/**
+ * Displays a success toast that indicates Markdown was copied.
+ * @param description - Optional body text appended to the notification.
+ */
 export function showSuccessToast(description?: string) {
   enqueueToast({
     title: "Markdown copied",
@@ -167,6 +184,10 @@ export function showSuccessToast(description?: string) {
   });
 }
 
+/**
+ * Displays an error toast notifying the user that conversion failed.
+ * @param description - Optional body text appended to the notification.
+ */
 export function showErrorToast(description?: string) {
   enqueueToast({
     title: "Conversion failed",

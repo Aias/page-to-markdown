@@ -12,7 +12,9 @@ declare global {
 	}
 }
 
-// Default selectors to remove
+/**
+ * Selectors that are removed from every page prior to conversion to eliminate common chrome.
+ */
 const DEFAULT_REMOVE_SELECTORS = [
 	'script, style, noscript, iframe, svg',
 	'header, footer, aside, nav',
@@ -24,7 +26,10 @@ const DEFAULT_REMOVE_SELECTORS = [
 	'.related, .recommended',
 ];
 
-// Helper to slugify headings
+/**
+ * Generates a URL-friendly slug that mimics GitHub-style heading IDs.
+ * @param text - Raw heading text content.
+ */
 function slugify(text: string): string {
 	return text
 		.toLowerCase()
@@ -34,9 +39,11 @@ function slugify(text: string): string {
 		.replace(/^-+|-+$/g, '');
 }
 
-// Get the main content element using Readability or fallback
+/**
+ * Attempts to locate the primary article element using Readability, falling back to heuristics.
+ * @param doc - Document instance to evaluate.
+ */
 function getMainElement(doc: Document): HTMLElement {
-	// Try Mozilla Readability first
 	const documentClone = doc.cloneNode(true) as Document;
 	const article = new Readability(documentClone).parse();
 
@@ -46,7 +53,6 @@ function getMainElement(doc: Document): HTMLElement {
 		return el;
 	}
 
-	// Fallback to custom selector or defaults
 	const currentDomain = window.location.hostname;
 	let selector = 'main';
 
@@ -61,52 +67,52 @@ function getMainElement(doc: Document): HTMLElement {
 	);
 }
 
-// Remove cruft and clean up content
+/**
+ * Normalizes the extracted DOM by stripping noise, unused wrappers, and unsupported media.
+ * @param el - Root element to clean in-place.
+ * @param removeSelectors - Domain-specific selectors to strip after the defaults.
+ */
 function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
-	// Remove all selectors
 	const allRemoveSelectors = [...DEFAULT_REMOVE_SELECTORS, ...removeSelectors];
 	allRemoveSelectors.forEach((sel) => {
 		el.querySelectorAll(sel).forEach((node) => node.remove());
 	});
 
-	// Remove empty and hidden elements
 	el.querySelectorAll('*').forEach((node) => {
 		const element = node as HTMLElement;
 		const style = getComputedStyle(element);
 
-		// Remove if empty (no text and no images)
 		if (!element.textContent?.trim() && element.querySelectorAll('img, svg').length === 0) {
 			element.remove();
 			return;
 		}
 
-		// Remove if hidden
 		if (style.display === 'none' || style.visibility === 'hidden') {
 			element.remove();
 			return;
 		}
 	});
 
-	// Process images
 	el.querySelectorAll('img').forEach((img) => {
 		resolveLazyImage(img);
-		// Skip tracker pixels
 		if (img.width < 32 || img.height < 32) {
 			img.remove();
 			return;
 		}
 
-		// Convert relative URLs to absolute
 		if (img.src) {
 			try {
 				img.src = new URL(img.src, location.href).href;
 			} catch (e) {
-				// Invalid URL, skip
 			}
 		}
 	});
 }
 
+/**
+ * Promotes lazily-loaded image sources to the `src` attribute when possible.
+ * @param img - Image element to normalize.
+ */
 function resolveLazyImage(img: HTMLImageElement): void {
 	const attrCandidates = [
 		'data-src',
@@ -179,6 +185,11 @@ function resolveLazyImage(img: HTMLImageElement): void {
 	}
 }
 
+/**
+ * Picks the highest quality candidate from a srcset descriptor string.
+ * @param srcset - Raw srcset attribute value.
+ * @returns Absolute or relative URL of the chosen source, or null if none.
+ */
 function chooseBestSrcFromSrcset(srcset: string): string | null {
 	const candidates = srcset
 		.split(',')
@@ -210,7 +221,10 @@ function chooseBestSrcFromSrcset(srcset: string): string | null {
 	return candidates[0]?.url || null;
 }
 
-// Normalize anchor hrefs and strip tracking params
+/**
+ * Rewrites anchor URLs to remove tracking parameters while preserving relativity.
+ * @param el - Element whose descendant links should be normalized.
+ */
 function normalizeLinks(el: HTMLElement): void {
 	const trackingParams = new Set(['fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref']);
 
@@ -234,11 +248,14 @@ function normalizeLinks(el: HTMLElement): void {
 			paramsToDelete.forEach((key) => url.searchParams.delete(key));
 			anchor.setAttribute('href', url.toString());
 		} catch (err) {
-			// Ignore invalid URLs so we do not break relative anchors
 		}
 	});
 }
 
+/**
+ * Replaces linked heading wrappers so that Markdown headings are not wrapped in anchors.
+ * @param el - Element containing potential linked headings.
+ */
 function unwrapHeadingLinks(el: HTMLElement): void {
 	el.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
 		const element = heading as HTMLElement;
@@ -256,6 +273,10 @@ function unwrapHeadingLinks(el: HTMLElement): void {
 	});
 }
 
+/**
+ * Consolidates metadata around code block containers from common MDX/rehype setups.
+ * @param el - Element containing code figures to normalize.
+ */
 function prepareCodeBlockContainers(el: HTMLElement): void {
 	el.querySelectorAll('[data-rehype-pretty-code-figure]').forEach((figure) => {
 		const pre = figure.querySelector('pre');
@@ -297,6 +318,10 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
 	});
 }
 
+/**
+ * Retrieves canonical Markdown linked via an alternate rel, if available.
+ * @returns The sanitized Markdown body or null when unavailable.
+ */
 async function fetchCanonicalMarkdown(): Promise<string | null> {
 	const link = document.querySelector('a[rel="alternate"][type="text/markdown"]') as HTMLAnchorElement | null;
 	if (!link || !link.href) {
@@ -317,6 +342,10 @@ async function fetchCanonicalMarkdown(): Promise<string | null> {
 	}
 }
 
+/**
+ * Removes existing front matter from Markdown to avoid duplicating metadata.
+ * @param markdown - Raw Markdown content potentially containing YAML front matter.
+ */
 function stripFrontMatter(markdown: string): { frontMatter: string | null; content: string } {
 	const trimmed = markdown.trimStart();
 	if (!trimmed.startsWith('---')) {
@@ -340,6 +369,10 @@ function stripFrontMatter(markdown: string): { frontMatter: string | null; conte
 	return { frontMatter: lines.slice(0, closingIndex + 1).join('\n'), content: contentLines.join('\n').trim() };
 }
 
+/**
+ * Normalises fenced code blocks by trimming leading and trailing blank lines.
+ * @param code - Code block content extracted from the DOM.
+ */
 function trimFencePadding(code: string): string {
 	const normalized = code.replace(/\r\n/g, '\n');
 	const lines = normalized.split('\n');
@@ -355,6 +388,10 @@ function trimFencePadding(code: string): string {
 	return lines.join('\n');
 }
 
+/**
+ * Returns the first string with non-whitespace content from the provided list.
+ * @param values - Candidate string values to scan.
+ */
 function firstNonEmpty(values: Array<string | null | undefined>): string | null {
 	for (const value of values) {
 		if (typeof value !== 'string') {
@@ -368,6 +405,12 @@ function firstNonEmpty(values: Array<string | null | undefined>): string | null 
 	return null;
 }
 
+/**
+ * Derives the language identifier for a code block using data attributes, classes, and wrappers.
+ * @param pre - The <pre> element housing the code.
+ * @param code - The optional <code> element inside the pre.
+ * @param figure - A higher level wrapper that may contain metadata.
+ */
 function extractLanguage(pre: HTMLElement, code: HTMLElement | null, figure: HTMLElement | null): string | null {
 	const candidates: Array<string | null | undefined> = [
 		pre.dataset.language,
@@ -398,6 +441,13 @@ function extractLanguage(pre: HTMLElement, code: HTMLElement | null, figure: HTM
 	return language ? language.toLowerCase() : null;
 }
 
+/**
+ * Attempts to derive an explicit title for a code block from assorted UI affordances.
+ * @param pre - The <pre> node that forms the code block.
+ * @param code - Nested <code> element that might store metadata.
+ * @param figure - Wrapper element containing captions or labels.
+ * @param demoContainer - Optional interactive container that exposes the active tab label.
+ */
 function extractTitle(
 	pre: HTMLElement,
 	code: HTMLElement | null,
@@ -428,10 +478,18 @@ function extractTitle(
 	return title ? title.replace(/\s+/g, ' ').trim() : null;
 }
 
+/**
+ * Escapes double quotes within info strings used for fenced code metadata.
+ * @param value - Raw metadata string.
+ */
 function escapeInfoString(value: string): string {
 	return value.replace(/"/g, '\\"');
 }
 
+/**
+ * Replaces embedded media with textual descriptions so Markdown consumers know what was present.
+ * @param el - Element whose descendants are inspected for embeddable media.
+ */
 function describeEmbeddedMedia(el: HTMLElement): void {
 	const mediaNodes = Array.from(el.querySelectorAll('iframe, video, audio')) as HTMLElement[];
 
@@ -503,6 +561,11 @@ interface FootnoteDefinition {
 	html: string;
 }
 
+/**
+ * Converts footnote references and definitions into a Markdown-friendly structure.
+ * @param el - Element containing potential footnote markup.
+ * @returns An ordered list of extracted footnote definitions.
+ */
 function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 	const footnotes: FootnoteDefinition[] = [];
 	const idToLabel = new Map<string, string>();
@@ -624,6 +687,11 @@ function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 	return footnotes;
 }
 
+/**
+ * Produces the Markdown appendix that lists captured footnotes.
+ * @param service - Turndown instance used for HTML to Markdown conversion.
+ * @param footnotes - Ordered collection of footnote definitions.
+ */
 function renderFootnotes(service: TurndownService, footnotes: FootnoteDefinition[]): string {
 	if (footnotes.length === 0) {
 		return '';
@@ -642,7 +710,10 @@ function renderFootnotes(service: TurndownService, footnotes: FootnoteDefinition
 		.join('\n');
 }
 
-// Generate table of contents
+/**
+ * Derives an indented Markdown table of contents using heading hierarchy.
+ * @param el - Element inspected for headings.
+ */
 function generateTOC(el: HTMLElement): string {
 	return Array.from(el.querySelectorAll('h1,h2,h3,h4,h5,h6'))
 		.map((h) => {
@@ -650,7 +721,7 @@ function generateTOC(el: HTMLElement): string {
 			const depth = parseInt(heading.tagName[1]) - 1;
 			const slug = heading.id || slugify(heading.textContent || '');
 
-			// Ensure heading has ID for TOC links
+			/** Ensure heading has ID for TOC links. */
 			if (!heading.id) {
 				heading.id = slug;
 			}
@@ -660,40 +731,45 @@ function generateTOC(el: HTMLElement): string {
 		.join('\n');
 }
 
-// Post-process markdown for LLM friendliness
+/**
+ * Performs final Markdown cleanup to ensure consistent spacing and formatting.
+ * @param markdown - Markdown output produced by Turndown.
+ */
 function postProcessMarkdown(markdown: string): string {
 	return (
 		markdown
-			// Collapse multiple blank lines
+			/** Collapse multiple blank lines. */
 			.replace(/\n{3,}/g, '\n\n')
-			// Replace smart quotes
+			/** Replace smart quotes. */
 			.replace(/[""]/g, '"')
 			.replace(/['']/g, "'")
-			// Replace non-breaking spaces
+			/** Replace non-breaking spaces. */
 			.replace(/\u00A0/g, ' ')
-			// Trim trailing whitespace from lines
+			/** Trim trailing whitespace from lines. */
 			.split('\n')
 			.map((line) => line.trimEnd())
 			.join('\n')
-			// Ensure proper spacing around code blocks
+			/** Ensure proper spacing around code blocks. */
 			.replace(/```([^\n]*)\n/g, '\n```$1\n')
 			.replace(/\n```/g, '\n```\n')
-			// Trim final output
+			/** Trim final output. */
 			.trim()
 	);
 }
 
-// Main conversion function
+/**
+ * Orchestrates the end-to-end page conversion pipeline and copies Markdown to the clipboard.
+ */
 window.convertPageToMarkdown = async function () {
 	try {
-		// Load custom configs first
+		/** Load custom configs first. */
 		await loadCustomConfigs();
 
 		const currentDomain = window.location.hostname;
 		const domainConfig = domainConfigs[currentDomain] || {};
 		const removeSelectors = domainConfig.remove || [];
 
-		// Get main content element
+		/** Locate the main content root. */
 		const mainEl = getMainElement(document);
 
 		try {
@@ -828,7 +904,7 @@ window.convertPageToMarkdown = async function () {
 			bodyContent = footnoteMarkdown ? `${processedMarkdown}\n\n${footnoteMarkdown}` : processedMarkdown;
 		}
 
-		// Build front matter
+		/** Build front matter. */
 		const frontMatter = `---
 title: "${title.replace(/"/g, '\\"')}"
 source: "${url}"
@@ -839,7 +915,7 @@ tags: []
 toc: true
 ---`;
 
-		// Combine all parts
+		/** Combine all parts. */
 		const finalOutput = [
 			frontMatter,
 			'',
@@ -852,28 +928,32 @@ toc: true
 			bodyContent,
 		].join('\n');
 
-		// Copy to clipboard with promise handling
-	const success = await copyToClipboard(finalOutput);
-	if (success) {
-		showSuccessToast('Markdown copied to clipboard.');
-	} else {
-		showErrorToast('Failed to copy. Check console for details.');
-		console.error('Markdown output:', finalOutput);
-	}
+		/** Copy to clipboard with promise handling. */
+		const success = await copyToClipboard(finalOutput);
+		if (success) {
+			showSuccessToast('Markdown copied to clipboard.');
+		} else {
+			showErrorToast('Failed to copy. Check console for details.');
+			console.error('Markdown output:', finalOutput);
+		}
 	} catch (err) {
 		console.error('Failed to convert page to markdown:', err);
 		showErrorToast('Error converting page. Check console.');
 	}
 };
 
-// Enhanced clipboard function with promise
+/**
+ * Copies text to the clipboard, falling back to the legacy execCommand strategy when needed.
+ * @param text - Markdown content to be copied.
+ * @returns True when the clipboard update succeeds.
+ */
 async function copyToClipboard(text: string): Promise<boolean> {
 	try {
-		// Try modern clipboard API
+		/** Try the modern clipboard API first. */
 		await navigator.clipboard.writeText(text);
 		return true;
 	} catch (err) {
-		// Fallback to execCommand
+		/** Fallback to the deprecated execCommand path when necessary. */
 		console.log('Falling back to execCommand for clipboard');
 		const textarea = document.createElement('textarea');
 		textarea.value = text;
@@ -891,7 +971,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
 	}
 }
 
-// Add context menu support
+/**
+ * Responds to requests sent from the background script when the context menu is used.
+ * @listens chrome.runtime#onMessage
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 	if (request.action === 'convertToMarkdown') {
 		window.convertPageToMarkdown?.();

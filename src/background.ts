@@ -1,4 +1,7 @@
-// Create context menu on extension install/update
+/**
+ * Registers the context menu entry used to trigger Markdown conversion.
+ * @listens chrome.runtime#onInstalled
+ */
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "convert-to-markdown",
@@ -7,20 +10,30 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Handle context menu clicks
+/**
+ * Handles context menu activations for the convert-to-markdown action.
+ * @listens chrome.contextMenus#onClicked
+ */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "convert-to-markdown" && tab?.id) {
     await executeConversion(tab);
   }
 });
 
-// Handle extension icon clicks
+/**
+ * Converts the active tab when the extension toolbar icon is clicked.
+ * @listens chrome.action#onClicked
+ */
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab?.id) {
     await executeConversion(tab);
   }
 });
 
+/**
+ * Responds to messages requesting conversion of the current active tab.
+ * @listens chrome.runtime#onMessage
+ */
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "convert-current-tab") {
     (async () => {
@@ -41,16 +54,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return undefined;
 });
 
-// Execute the conversion
+/**
+ * Focuses the provided tab and injects the conversion script.
+ * @param tab - The tab that should run the Markdown conversion.
+ */
 async function executeConversion(tab: chrome.tabs.Tab) {
   if (!tab.id || !tab.windowId) return;
   
   try {
-    // Focus the window first
     await chrome.windows.update(tab.windowId, { focused: true });
-    // Make sure the tab is active
     await chrome.tabs.update(tab.id, { active: true });
-    // A short delay can sometimes help ensure the focus state
     await new Promise((r) => setTimeout(r, 100));
 
     await chrome.scripting.executeScript({
@@ -64,7 +77,10 @@ async function executeConversion(tab: chrome.tabs.Tab) {
   }
 }
 
-// Optional: Add keyboard shortcut support
+/**
+ * Invokes conversion when the user presses the registered keyboard shortcut.
+ * @listens chrome.commands#onCommand
+ */
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === "convert-to-markdown") {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
