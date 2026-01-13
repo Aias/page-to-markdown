@@ -1,4 +1,4 @@
-import { forwardRef, type ComponentPropsWithoutRef } from 'react';
+import { type ComponentPropsWithoutRef, forwardRef } from 'react';
 import { cn } from './cn';
 
 type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost';

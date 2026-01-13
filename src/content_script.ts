@@ -1,10 +1,10 @@
-import TurndownService from 'turndown';
-import * as TurndownPluginGfm from 'turndown-plugin-gfm';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
+import TurndownService from 'turndown';
+import * as TurndownPluginGfm from 'turndown-plugin-gfm';
 
 import { domainConfigs, loadCustomConfigs } from './rules';
-import { showSuccessToast, showErrorToast } from './toast';
+import { showErrorToast, showSuccessToast } from './toast';
 
 declare global {
 	interface Window {
@@ -75,7 +75,9 @@ function getMainElement(doc: Document): HTMLElement {
 function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 	const allRemoveSelectors = [...DEFAULT_REMOVE_SELECTORS, ...removeSelectors];
 	allRemoveSelectors.forEach((sel) => {
-		el.querySelectorAll(sel).forEach((node) => node.remove());
+		el.querySelectorAll(sel).forEach((node) => {
+			node.remove();
+		});
 	});
 
 	el.querySelectorAll('*').forEach((node) => {
@@ -103,7 +105,7 @@ function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 		if (img.src) {
 			try {
 				img.src = new URL(img.src, location.href).href;
-			} catch (e) {}
+			} catch (_e) {}
 		}
 	});
 }
@@ -178,7 +180,7 @@ function resolveLazyImage(img: HTMLImageElement): void {
 	if (chosenSrc) {
 		try {
 			img.src = new URL(chosenSrc, location.href).href;
-		} catch (err) {
+		} catch (_err) {
 			img.src = chosenSrc;
 		}
 	}
@@ -244,9 +246,11 @@ function normalizeLinks(el: HTMLElement): void {
 				}
 			});
 
-			paramsToDelete.forEach((key) => url.searchParams.delete(key));
+			paramsToDelete.forEach((key) => {
+				url.searchParams.delete(key);
+			});
 			anchor.setAttribute('href', url.toString());
-		} catch (err) {}
+		} catch (_err) {}
 	});
 }
 
@@ -307,18 +311,18 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
 			}
 		}
 
-		figure
-			.querySelectorAll('button, .CodeBlockPanel, .ScrollAreaScrollbar')
-			.forEach((node) => node.remove());
+		figure.querySelectorAll('button, .CodeBlockPanel, .ScrollAreaScrollbar').forEach((node) => {
+			node.remove();
+		});
 	});
 
 	el.querySelectorAll('[role="figure"]').forEach((figure) => {
 		if (!figure.querySelector('pre')) {
 			return;
 		}
-		figure
-			.querySelectorAll('button, [role="tablist"], [role="combobox"]')
-			.forEach((node) => node.remove());
+		figure.querySelectorAll('button, [role="tablist"], [role="combobox"]').forEach((node) => {
+			node.remove();
+		});
 	});
 }
 
@@ -530,7 +534,7 @@ function describeEmbeddedMedia(el: HTMLElement): void {
 		if (rawSrc) {
 			try {
 				resolvedUrl = new URL(rawSrc, location.href).href;
-			} catch (err) {
+			} catch (_err) {
 				resolvedUrl = rawSrc;
 			}
 		}
@@ -546,7 +550,7 @@ function describeEmbeddedMedia(el: HTMLElement): void {
 			try {
 				const url = new URL(resolvedUrl);
 				provider = url.hostname.replace(/^www\./, '');
-			} catch (err) {
+			} catch (_err) {
 				provider = '';
 			}
 		}
@@ -598,7 +602,7 @@ function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 		try {
 			const url = new URL(href, location.href);
 			return url.hash ? url.hash.replace(/^#/, '') : '';
-		} catch (err) {
+		} catch (_err) {
 			return '';
 		}
 	};
@@ -629,7 +633,9 @@ function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 					.querySelectorAll(
 						'a[role="doc-backlink"], a[href^="#fnref"], a[href^="#ref"], .footnote-backref'
 					)
-					.forEach((backref) => backref.remove());
+					.forEach((backref) => {
+						backref.remove();
+					});
 
 				const sanitized = DOMPurify.sanitize(definitionClone.innerHTML).trim();
 				if (sanitized) {
@@ -731,7 +737,7 @@ function generateTOC(el: HTMLElement): string {
 	return Array.from(el.querySelectorAll('h1,h2,h3,h4,h5,h6'))
 		.map((h) => {
 			const heading = h as HTMLElement;
-			const depth = parseInt(heading.tagName[1]) - 1;
+			const depth = parseInt(heading.tagName[1], 10) - 1;
 			const slug = heading.id || slugify(heading.textContent || '');
 
 			/** Ensure heading has ID for TOC links. */
@@ -773,7 +779,7 @@ function postProcessMarkdown(markdown: string): string {
 /**
  * Orchestrates the end-to-end page conversion pipeline and copies Markdown to the clipboard.
  */
-window.convertPageToMarkdown = async function () {
+window.convertPageToMarkdown = async () => {
 	try {
 		/** Load custom configs first. */
 		await loadCustomConfigs();
@@ -841,7 +847,7 @@ window.convertPageToMarkdown = async function () {
 			turndownService.addRule('headingsWithIds', {
 				filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
 				replacement: (content, node) => {
-					const hLevel = parseInt(node.nodeName.charAt(1));
+					const hLevel = parseInt(node.nodeName.charAt(1), 10);
 					const hPrefix = '#'.repeat(hLevel);
 					const hContent = content.trim();
 					const element = node as HTMLElement;
@@ -969,7 +975,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 		/** Try the modern clipboard API first. */
 		await navigator.clipboard.writeText(text);
 		return true;
-	} catch (err) {
+	} catch (_err) {
 		/** Fallback to the deprecated execCommand path when necessary. */
 		console.log('Falling back to execCommand for clipboard');
 		const textarea = document.createElement('textarea');
@@ -992,7 +998,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
  * Responds to requests sent from the background script when the context menu is used.
  * @listens chrome.runtime#onMessage
  */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 	if (request.action === 'convertToMarkdown') {
 		window.convertPageToMarkdown?.();
 		sendResponse({ success: true });
