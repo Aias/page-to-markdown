@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Toast } from '@base-ui-components/react';
+import { Toast } from '@base-ui/react';
 
 type ToastOptions = {
 	title: string;

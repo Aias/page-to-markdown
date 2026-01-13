@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Field, Input, Toast } from '@base-ui-components/react';
+import { Field, Input, Toast } from '@base-ui/react';
 import { DomainConfig, defaultDomainConfigs, saveCustomConfig } from '../rules';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';

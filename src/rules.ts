@@ -43,21 +43,25 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
 /**
  * In-memory cache of the merged default and user-defined domain configurations.
  */
-let domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
+export let domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
+
+function hasChromeStorage(): boolean {
+	return typeof chrome !== 'undefined' && !!chrome.storage;
+}
 
 /**
  * Hydrates {@link domainConfigs} with user-defined overrides from Chrome sync storage.
  */
 export async function loadCustomConfigs(): Promise<void> {
-	try {
-		if (typeof chrome !== 'undefined' && chrome.storage) {
-			const result = await chrome.storage.sync.get('domainConfigs');
-			if (result.domainConfigs) {
-				domainConfigs = { ...defaultDomainConfigs, ...result.domainConfigs };
-			}
-		}
-	} catch (error) {
+	if (!hasChromeStorage()) return;
+
+	const result = await chrome.storage.sync.get('domainConfigs').catch((error: unknown) => {
 		console.error('Failed to load custom domain configs:', error);
+		return null;
+	});
+
+	if (result?.domainConfigs) {
+		domainConfigs = { ...defaultDomainConfigs, ...result.domainConfigs };
 	}
 }
 
@@ -67,15 +71,24 @@ export async function loadCustomConfigs(): Promise<void> {
  * @param config - Selector and optional removal rules applied during conversion.
  */
 export async function saveCustomConfig(domain: string, config: DomainConfig): Promise<void> {
-	try {
-		const result = await chrome.storage.sync.get('domainConfigs');
-		const customConfigs = result.domainConfigs || {};
-		customConfigs[domain] = config;
-		await chrome.storage.sync.set({ domainConfigs: customConfigs });
-		domainConfigs[domain] = config;
-	} catch (error) {
+	if (!hasChromeStorage()) return;
+
+	const result = await chrome.storage.sync.get('domainConfigs').catch((error: unknown) => {
+		console.error('Failed to load existing domain configs:', error);
+		return null;
+	});
+
+	const existing = result?.domainConfigs;
+	const customConfigs: Record<string, DomainConfig> = {
+		...(typeof existing === 'object' && existing !== null ? existing : {}),
+		[domain]: config,
+	};
+
+	await chrome.storage.sync.set({ domainConfigs: customConfigs }).catch((error: unknown) => {
 		console.error('Failed to save custom domain config:', error);
-	}
+	});
+
+	domainConfigs[domain] = config;
 }
 
 /**
@@ -85,5 +98,3 @@ export async function saveCustomConfig(domain: string, config: DomainConfig): Pr
 export function getDomainConfig(domain: string): DomainConfig | undefined {
 	return domainConfigs[domain];
 }
-
-export { domainConfigs };
