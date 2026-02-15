@@ -8,15 +8,16 @@ import { showErrorToast, showSuccessToast } from './toast';
 
 declare global {
 	interface Window {
-		convertPageToMarkdown?: () => void;
+		convertPageToMarkdown?: () => Promise<void>;
 	}
 }
 
 /**
  * Selectors that are removed from every page prior to conversion to eliminate common chrome.
+ * Note: iframe and svg are handled by describeEmbeddedMedia/describeSVGs before this runs.
  */
 const DEFAULT_REMOVE_SELECTORS = [
-	'script, style, noscript, iframe, svg',
+	'script, style, noscript',
 	'header, footer, aside, nav',
 	'.share, [aria-label*=share], [role=button][data-action*=share]',
 	'.ads, [class*=ad-], [id*=ad-]',
@@ -60,11 +61,11 @@ function getMainElement(doc: Document): HTMLElement {
 		selector = domainConfigs[currentDomain].selector;
 	}
 
-	return (
+	const liveEl =
 		(doc.querySelector(selector) as HTMLElement) ||
 		(doc.querySelector('article, main') as HTMLElement) ||
-		doc.body
-	);
+		doc.body;
+	return liveEl.cloneNode(true) as HTMLElement;
 }
 
 /**
@@ -82,14 +83,21 @@ function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 
 	el.querySelectorAll('*').forEach((node) => {
 		const element = node as HTMLElement;
-		const style = getComputedStyle(element);
 
-		if (!element.textContent?.trim() && element.querySelectorAll('img, svg').length === 0) {
+		if (
+			element.hidden ||
+			element.getAttribute('aria-hidden') === 'true' ||
+			element.style.display === 'none' ||
+			element.style.visibility === 'hidden'
+		) {
 			element.remove();
 			return;
 		}
 
-		if (style.display === 'none' || style.visibility === 'hidden') {
+		if (
+			!element.textContent?.trim() &&
+			element.querySelectorAll('img, video, audio').length === 0
+		) {
 			element.remove();
 			return;
 		}
@@ -97,7 +105,10 @@ function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 
 	el.querySelectorAll('img').forEach((img) => {
 		resolveLazyImage(img);
-		if (img.width < 32 || img.height < 32) {
+
+		const w = parseInt(img.getAttribute('width') || '0', 10);
+		const h = parseInt(img.getAttribute('height') || '0', 10);
+		if (w > 0 && w < 32 && h > 0 && h < 32) {
 			img.remove();
 			return;
 		}
@@ -136,7 +147,7 @@ function resolveLazyImage(img: HTMLImageElement): void {
 	const srcsetCandidates = [
 		img.getAttribute('data-srcset'),
 		img.getAttribute('data-lazy-srcset'),
-		img.getAttribute('data-srcset'),
+		img.getAttribute('data-original-srcset'),
 		img.getAttribute('srcset'),
 	].filter(Boolean) as string[];
 
@@ -232,6 +243,10 @@ function normalizeLinks(el: HTMLElement): void {
 	el.querySelectorAll('a[href]').forEach((anchor) => {
 		const rawHref = anchor.getAttribute('href');
 		if (!rawHref || rawHref.startsWith('javascript:')) {
+			return;
+		}
+
+		if (rawHref.startsWith('#')) {
 			return;
 		}
 
@@ -332,8 +347,8 @@ function prepareCodeBlockContainers(el: HTMLElement): void {
  */
 async function fetchCanonicalMarkdown(): Promise<string | null> {
 	const link = document.querySelector(
-		'a[rel="alternate"][type="text/markdown"]'
-	) as HTMLAnchorElement | null;
+		'link[rel="alternate"][type="text/markdown"]'
+	) as HTMLLinkElement | null;
 	if (!link || !link.href) {
 		return null;
 	}
@@ -573,6 +588,47 @@ function describeEmbeddedMedia(el: HTMLElement): void {
 	});
 }
 
+/**
+ * Replaces SVG elements with textual descriptions, removing decorative/icon SVGs.
+ * @param el - Element whose descendant SVGs are inspected.
+ */
+function describeSVGs(el: HTMLElement): void {
+	const svgs = Array.from(el.querySelectorAll('svg'));
+
+	for (const svg of svgs) {
+		const w = parseInt(svg.getAttribute('width') || '0', 10);
+		const h = parseInt(svg.getAttribute('height') || '0', 10);
+		if (w > 0 && w < 48 && h > 0 && h < 48) {
+			svg.remove();
+			continue;
+		}
+
+		const title = svg.querySelector('title')?.textContent?.trim();
+		const desc = svg.querySelector('desc')?.textContent?.trim();
+		const ariaLabel = svg.getAttribute('aria-label')?.trim();
+		const description = title || desc || ariaLabel;
+
+		if (description) {
+			const placeholder = svg.ownerDocument.createElement('p');
+			placeholder.textContent = `[SVG: ${description}]`;
+			svg.replaceWith(placeholder);
+			continue;
+		}
+
+		const parent = svg.parentElement;
+		const parentTextLen = parent?.textContent?.trim().length ?? 0;
+		const svgTextLen = svg.textContent?.trim().length ?? 0;
+		if (parent && parentTextLen > svgTextLen) {
+			svg.remove();
+			continue;
+		}
+
+		const placeholder = svg.ownerDocument.createElement('p');
+		placeholder.textContent = '[SVG diagram]';
+		svg.replaceWith(placeholder);
+	}
+}
+
 interface FootnoteDefinition {
 	label: string;
 	html: string;
@@ -642,9 +698,8 @@ function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 					idToHtml.set(targetId, sanitized);
 				}
 
-				definition.remove();
-
 				const parent = definition.parentElement;
+				definition.remove();
 				if (parent && parent.children.length === 0 && /^(ol|ul)$/i.test(parent.tagName)) {
 					parent.remove();
 				}
@@ -734,13 +789,23 @@ function renderFootnotes(service: TurndownService, footnotes: FootnoteDefinition
  * @param el - Element inspected for headings.
  */
 function generateTOC(el: HTMLElement): string {
+	const usedSlugs = new Map<string, number>();
+
 	return Array.from(el.querySelectorAll('h1,h2,h3,h4,h5,h6'))
 		.map((h) => {
 			const heading = h as HTMLElement;
 			const depth = parseInt(heading.tagName[1], 10) - 1;
-			const slug = heading.id || slugify(heading.textContent || '');
+			let slug = heading.id || slugify(heading.textContent || '');
 
-			/** Ensure heading has ID for TOC links. */
+			const count = usedSlugs.get(slug);
+			if (count !== undefined) {
+				const next = count + 1;
+				usedSlugs.set(slug, next);
+				slug = `${slug}-${next}`;
+			} else {
+				usedSlugs.set(slug, 0);
+			}
+
 			if (!heading.id) {
 				heading.id = slug;
 			}
@@ -768,12 +833,22 @@ function postProcessMarkdown(markdown: string): string {
 			.split('\n')
 			.map((line) => line.trimEnd())
 			.join('\n')
-			/** Ensure proper spacing around code blocks. */
-			.replace(/```([^\n]*)\n/g, '\n```$1\n')
-			.replace(/\n```/g, '\n```\n')
 			/** Trim final output. */
 			.trim()
 	);
+}
+
+/**
+ * Escapes a string for safe embedding in a double-quoted YAML value.
+ * @param value - Raw string to escape.
+ */
+function escapeYaml(value: string): string {
+	return value
+		.replace(/\\/g, '\\\\')
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, '\\n')
+		.replace(/\r/g, '\\r')
+		.replace(/\t/g, '\\t');
 }
 
 /**
@@ -795,6 +870,11 @@ window.convertPageToMarkdown = async () => {
 			describeEmbeddedMedia(mainEl);
 		} catch (mediaError) {
 			console.warn('Failed to describe embedded media:', mediaError);
+		}
+		try {
+			describeSVGs(mainEl);
+		} catch (svgError) {
+			console.warn('Failed to describe SVGs:', svgError);
 		}
 		cleanContent(mainEl, removeSelectors);
 		normalizeLinks(mainEl);
@@ -929,11 +1009,11 @@ window.convertPageToMarkdown = async () => {
 
 		/** Build front matter. */
 		const frontMatter = `---
-title: "${title.replace(/"/g, '\\"')}"
+title: "${escapeYaml(title)}"
 source: "${url}"
 retrieved: "${retrievalDate}"
-author: "${author.replace(/"/g, '\\"')}"
-description: "${description.replace(/"/g, '\\"')}"
+author: "${escapeYaml(author)}"
+description: "${escapeYaml(description)}"
 tags: []
 toc: true
 ---`;
@@ -993,15 +1073,3 @@ async function copyToClipboard(text: string): Promise<boolean> {
 		}
 	}
 }
-
-/**
- * Responds to requests sent from the background script when the context menu is used.
- * @listens chrome.runtime#onMessage
- */
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-	if (request.action === 'convertToMarkdown') {
-		window.convertPageToMarkdown?.();
-		sendResponse({ success: true });
-	}
-	return true;
-});

@@ -67,12 +67,14 @@ async function executeConversion(tab: chrome.tabs.Tab) {
 	try {
 		await chrome.windows.update(tab.windowId, { focused: true });
 		await chrome.tabs.update(tab.id, { active: true });
-		await new Promise((r) => setTimeout(r, 100));
 
 		await chrome.scripting.executeScript({
 			target: { tabId: tab.id },
-			func: () => {
-				window.convertPageToMarkdown && window.convertPageToMarkdown();
+			func: async () => {
+				if (!window.convertPageToMarkdown) {
+					throw new Error('Content script not loaded');
+				}
+				await window.convertPageToMarkdown();
 			},
 		});
 	} catch (error) {
