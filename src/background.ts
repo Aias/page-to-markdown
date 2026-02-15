@@ -16,7 +16,11 @@ chrome.runtime.onInstalled.addListener(() => {
  */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 	if (info.menuItemId === 'convert-to-markdown' && tab?.id) {
-		await executeConversion(tab);
+		try {
+			await executeConversion(tab);
+		} catch (error) {
+			console.error('Failed to execute conversion:', error);
+		}
 	}
 });
 
@@ -26,7 +30,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
  */
 chrome.action.onClicked.addListener(async (tab) => {
 	if (tab?.id) {
-		await executeConversion(tab);
+		try {
+			await executeConversion(tab);
+		} catch (error) {
+			console.error('Failed to execute conversion:', error);
+		}
 	}
 });
 
@@ -62,24 +70,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * @param tab - The tab that should run the Markdown conversion.
  */
 async function executeConversion(tab: chrome.tabs.Tab) {
-	if (!tab.id || !tab.windowId) return;
-
-	try {
-		await chrome.windows.update(tab.windowId, { focused: true });
-		await chrome.tabs.update(tab.id, { active: true });
-
-		await chrome.scripting.executeScript({
-			target: { tabId: tab.id },
-			func: async () => {
-				if (!window.convertPageToMarkdown) {
-					throw new Error('Content script not loaded');
-				}
-				await window.convertPageToMarkdown();
-			},
-		});
-	} catch (error) {
-		console.error('Failed to execute conversion:', error);
+	if (tab.id === undefined || tab.windowId === undefined) {
+		throw new Error('No active tab');
 	}
+
+	await chrome.windows.update(tab.windowId, { focused: true });
+	await chrome.tabs.update(tab.id, { active: true });
+
+	await chrome.scripting.executeScript({
+		target: { tabId: tab.id },
+		func: async () => {
+			if (!window.convertPageToMarkdown) {
+				throw new Error('Content script not loaded');
+			}
+			await window.convertPageToMarkdown();
+		},
+	});
 }
 
 /**
@@ -90,7 +96,13 @@ chrome.commands.onCommand.addListener(async (command) => {
 	if (command === 'convert-to-markdown') {
 		const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 		if (activeTab) {
-			await executeConversion(activeTab);
+			try {
+				await executeConversion(activeTab);
+			} catch (error) {
+				console.error('Failed to execute conversion:', error);
+			}
 		}
 	}
 });
+
+export {};

@@ -975,7 +975,14 @@ toc: true
  * Assembles the final Markdown document from its constituent parts.
  */
 export function buildOutput(frontMatter: string, toc: string, content: string): string {
-	return [frontMatter, '', '## Table of Contents', '', toc, '', '---', '', content].join('\n');
+	const trimmedToc = toc.trim();
+	if (!trimmedToc) {
+		return [frontMatter, '', '---', '', content].join('\n');
+	}
+
+	return [frontMatter, '', '## Table of Contents', '', trimmedToc, '', '---', '', content].join(
+		'\n'
+	);
 }
 
 /**

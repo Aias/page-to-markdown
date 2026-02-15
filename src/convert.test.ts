@@ -360,6 +360,12 @@ describe('buildOutput', () => {
 		expect(output).toContain('- [A](#a)');
 		expect(output).toContain('Body');
 	});
+
+	it('omits table of contents block when toc is empty', () => {
+		const output = buildOutput('---\ntitle: "T"\n---', '', 'Body');
+		expect(output).not.toContain('## Table of Contents');
+		expect(output).toContain('\n---\n\nBody');
+	});
 });
 
 describe('convertToMarkdown', () => {
