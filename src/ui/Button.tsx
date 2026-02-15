@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 		>
 			{loading ? (
 				<span className="inline-flex items-center gap-2">
-					<span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+					<span className="h-3 w-3 animate-spin rounded-full border-2 border-current/40 border-t-transparent" />
 					<span>{children}</span>
 				</span>
 			) : (

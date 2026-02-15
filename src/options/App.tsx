@@ -1,6 +1,12 @@
 import { Field, Input, Toast } from '@base-ui/react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { DomainConfig, defaultDomainConfigs, saveCustomConfig } from '../rules';
+import {
+	type DomainConfig,
+	defaultDomainConfigs,
+	removeCustomConfig,
+	resetCustomConfigs,
+	saveCustomConfig,
+} from '../rules';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { cn } from '../ui/cn';
@@ -50,24 +56,6 @@ async function readCustomConfigs(): Promise<Record<string, DomainConfig>> {
 		console.error('Failed to read custom configurations', error);
 		return {};
 	}
-}
-
-/**
- * Deletes the saved override for the supplied domain.
- * @param domain - Hostname whose configuration should be removed.
- */
-async function removeCustomConfig(domain: string): Promise<void> {
-	const result = await chrome.storage.sync.get('domainConfigs');
-	const configs = (result.domainConfigs ?? {}) as Record<string, DomainConfig>;
-	delete configs[domain];
-	await chrome.storage.sync.set({ domainConfigs: configs });
-}
-
-/**
- * Drops all stored custom domain overrides from Chrome sync storage.
- */
-async function resetCustomConfigs(): Promise<void> {
-	await chrome.storage.sync.remove('domainConfigs');
 }
 
 /**

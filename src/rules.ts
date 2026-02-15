@@ -25,7 +25,7 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
 		remove: ['.js-comment-edit-button', '.timeline-comment-actions'],
 	},
 	/** Documentation sites. */
-	'docs.microsoft.com': {
+	'learn.microsoft.com': {
 		selector: 'main',
 		remove: ['#feedback-section', '.alert', 'nav'],
 	},
@@ -43,7 +43,7 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
 /**
  * In-memory cache of the merged default and user-defined domain configurations.
  */
-export let domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
+export const domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
 
 function hasChromeStorage(): boolean {
 	return typeof chrome !== 'undefined' && !!chrome.storage;
@@ -60,9 +60,10 @@ export async function loadCustomConfigs(): Promise<void> {
 		return null;
 	});
 
-	if (result?.domainConfigs) {
-		domainConfigs = { ...defaultDomainConfigs, ...result.domainConfigs };
+	for (const key of Object.keys(domainConfigs)) {
+		delete domainConfigs[key];
 	}
+	Object.assign(domainConfigs, defaultDomainConfigs, result?.domainConfigs);
 }
 
 /**
@@ -92,9 +93,28 @@ export async function saveCustomConfig(domain: string, config: DomainConfig): Pr
 }
 
 /**
- * Retrieves the cached configuration for the provided domain.
- * @param domain - Hostname to look up.
+ * Deletes the saved override for the supplied domain and updates the in-memory cache.
+ * @param domain - Hostname whose configuration should be removed.
  */
-export function getDomainConfig(domain: string): DomainConfig | undefined {
-	return domainConfigs[domain];
+export async function removeCustomConfig(domain: string): Promise<void> {
+	if (!hasChromeStorage()) return;
+
+	const result = await chrome.storage.sync.get('domainConfigs');
+	const configs = (result.domainConfigs ?? {}) as Record<string, DomainConfig>;
+	delete configs[domain];
+	await chrome.storage.sync.set({ domainConfigs: configs });
+	delete domainConfigs[domain];
+}
+
+/**
+ * Drops all stored custom domain overrides and resets in-memory cache to defaults.
+ */
+export async function resetCustomConfigs(): Promise<void> {
+	if (!hasChromeStorage()) return;
+
+	await chrome.storage.sync.remove('domainConfigs');
+	for (const key of Object.keys(domainConfigs)) {
+		delete domainConfigs[key];
+	}
+	Object.assign(domainConfigs, defaultDomainConfigs);
 }

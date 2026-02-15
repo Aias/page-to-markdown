@@ -1,7 +1,7 @@
 {
 	"name": "page-to-markdown",
 	"private": true,
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
@@ -9,14 +9,18 @@
 		"tsc": "tsc",
 		"lint": "biome check .",
 		"fix": "biome check --write .",
-		"format": "biome format --write ."
+		"format": "biome format --write .",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.2.0",
 		"@mozilla/readability": "^0.6.0",
 		"dompurify": "^3.3.1",
 		"react": "^19.2.4",
-		"react-dom": "^19.2.4"
+		"react-dom": "^19.2.4",
+		"turndown": "^7.2.2",
+		"turndown-plugin-gfm": "^1.0.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.15",
@@ -27,11 +31,12 @@
 		"@types/react-dom": "^19.2.3",
 		"@types/turndown": "^5.0.6",
 		"@vitejs/plugin-react-swc": "^4.2.3",
+		"@vitest/coverage-v8": "^4.0.18",
+		"happy-dom": "^20.6.1",
 		"tailwindcss": "^4.1.18",
-		"turndown": "^7.2.2",
-		"turndown-plugin-gfm": "^1.0.2",
 		"typescript": "~5.9.3",
-		"vite": "^7.3.1"
+		"vite": "^7.3.1",
+		"vitest": "^4.0.18"
 	},
 	"packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd"
 }
