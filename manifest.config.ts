@@ -2,8 +2,8 @@ import { defineManifest } from '@crxjs/vite-plugin';
 
 export default defineManifest({
 	manifest_version: 3,
-	name: 'Page to Markdown LLM Converter',
-	version: '1.0.0',
+	name: 'HTML Page to Markdown Converter',
+	version: '1.2.0',
 	description: 'Converts the current page to Markdown suitable for LLM input.',
 	permissions: ['activeTab', 'scripting', 'clipboardWrite', 'contextMenus', 'storage'],
 	icons: {
