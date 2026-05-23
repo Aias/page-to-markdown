@@ -1,3 +1,4 @@
+import { showErrorToast, showSuccessToast } from './components/toast';
 import {
 	buildFrontMatter,
 	buildOutput,
@@ -6,7 +7,6 @@ import {
 	stripFrontMatter,
 } from './convert';
 import { domainConfigs, loadCustomConfigs } from './rules';
-import { showErrorToast, showSuccessToast } from './toast';
 
 declare global {
 	interface Window {
