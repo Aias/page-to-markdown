@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import * as TurndownPluginGfm from 'turndown-plugin-gfm';
 
-import type { DomainConfig } from './rules';
+import { type DomainConfig, resolveDomainConfig } from './rules';
 
 /**
  * Selectors that are removed from every page prior to conversion to eliminate common chrome.
@@ -13,7 +13,8 @@ export const DEFAULT_REMOVE_SELECTORS = [
 	'script, style, noscript',
 	'header, footer, aside, nav',
 	'.share, [aria-label*=share], [role=button][data-action*=share]',
-	'.ads, [class*=ad-], [id*=ad-]',
+	/** Anchored to class-token boundaries so words like "read-more" and "download" survive. */
+	'.ads, [class^="ad-"], [class*=" ad-"], [id^="ad-"]',
 	'.newsletter, .cookie, .banner, .modal',
 	'[class*=popup], [class*=overlay]',
 	'.comments, #comments',
@@ -32,7 +33,7 @@ export function slugify(text: string): string {
 	return text
 		.toLowerCase()
 		.trim()
-		.replace(/[^\w\s-]/g, '')
+		.replace(/[^\p{L}\p{N}\s_-]/gu, '')
 		.replace(/[\s_-]+/g, '-')
 		.replace(/^-+|-+$/g, '');
 }
@@ -43,27 +44,23 @@ export function slugify(text: string): string {
  * @returns Absolute or relative URL of the chosen source, or null if none.
  */
 export function chooseBestSrcFromSrcset(srcset: string): string | null {
-	const candidates = srcset
-		.split(',')
-		.map((entry) => entry.trim())
-		.filter(Boolean)
-		.map((entry) => {
-			const [urlPart, descriptor] = entry.split(/\s+/, 2);
-			let score = 1;
-			if (descriptor) {
-				const match = descriptor.match(/([\d.]+)(w|x)/);
-				if (match) {
-					const value = parseFloat(match[1]);
-					if (match[2] === 'w') {
-						score = value;
-					} else if (match[2] === 'x') {
-						score = value * 100;
-					}
-				}
-			}
-			return { url: urlPart, score };
-		})
-		.filter((candidate) => !!candidate.url);
+	/**
+	 * Matches a URL plus optional descriptor. The greedy `\S+` backtracks over a trailing
+	 * comma, so URLs containing commas (common in image CDN transform paths) stay intact.
+	 */
+	const entryPattern = /\s*(\S+)(?:\s+([\d.]+)([wx]))?\s*(?:,|$)/g;
+	const candidates: Array<{ url: string; score: number }> = [];
+
+	for (const [, url, value, unit] of srcset.matchAll(entryPattern)) {
+		if (!url) {
+			continue;
+		}
+		let score = 1;
+		if (value && unit) {
+			score = unit === 'x' ? parseFloat(value) * 100 : parseFloat(value);
+		}
+		candidates.push({ url, score });
+	}
 
 	if (candidates.length === 0) {
 		return null;
@@ -279,11 +276,35 @@ export function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 		});
 	});
 
-	const mediaTags = new Set(['IMG', 'VIDEO', 'AUDIO', 'PICTURE', 'SOURCE']);
+	/**
+	 * Elements that carry meaning without text content: media, void elements, table cells
+	 * whose position defines column alignment, and task-list checkboxes.
+	 */
+	const contentlessTags = new Set([
+		'IMG',
+		'VIDEO',
+		'AUDIO',
+		'PICTURE',
+		'SOURCE',
+		'BR',
+		'HR',
+		'TD',
+		'TH',
+		'INPUT',
+		'COL',
+		'COLGROUP',
+		'TRACK',
+		'WBR',
+	]);
 	el.querySelectorAll('*').forEach((node) => {
 		const element = node as HTMLElement;
 
-		if (mediaTags.has(element.tagName)) {
+		/** Whitespace inside code blocks is significant, so their internals are left alone. */
+		if (element.closest('pre, code')) {
+			return;
+		}
+
+		if (contentlessTags.has(element.tagName)) {
 			return;
 		}
 
@@ -325,11 +346,12 @@ export function cleanContent(el: HTMLElement, removeSelectors: string[]): void {
 }
 
 /**
- * Rewrites anchor URLs to remove tracking parameters while preserving relativity.
+ * Resolves anchor URLs against the page origin and strips tracking parameters.
  * @param el - Element whose descendant links should be normalized.
  */
 export function normalizeLinks(el: HTMLElement): void {
-	const trackingParams = new Set(['fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref']);
+	/** Only unambiguous click identifiers; `ref` is omitted because sites use it to address content. */
+	const trackingParams = new Set(['fbclid', 'gclid', 'mc_cid', 'mc_eid']);
 
 	el.querySelectorAll('a[href]').forEach((anchor) => {
 		const rawHref = anchor.getAttribute('href');
@@ -377,6 +399,10 @@ export function unwrapHeadingLinks(el: HTMLElement): void {
 		}
 
 		const anchor = onlyChild as HTMLElement;
+		/** Bail out when the heading holds text outside the anchor, which unwrapping would drop. */
+		if (element.textContent?.trim() !== anchor.textContent?.trim()) {
+			return;
+		}
 		element.innerHTML = anchor.innerHTML;
 	});
 }
@@ -717,7 +743,8 @@ export function generateTOC(el: HTMLElement): string {
 		.map((h) => {
 			const heading = h as HTMLElement;
 			const depth = parseInt(heading.tagName[1], 10) - 1;
-			let slug = heading.id || slugify(heading.textContent || '');
+			const text = heading.textContent?.trim() || '';
+			let slug = heading.id || slugify(text) || 'section';
 
 			const count = usedSlugs.get(slug);
 			if (count !== undefined) {
@@ -732,7 +759,9 @@ export function generateTOC(el: HTMLElement): string {
 				heading.id = slug;
 			}
 
-			return `${'  '.repeat(depth)}- [${heading.textContent?.trim()}](#${slug})`;
+			/** Brackets in heading text would otherwise terminate the Markdown link label early. */
+			const label = text.replace(/[[\]]/g, '\\$&');
+			return `${'  '.repeat(depth)}- [${label}](#${slug})`;
 		})
 		.join('\n');
 }
@@ -829,6 +858,13 @@ export function getMainElement(
 	hostname: string,
 	configs: Record<string, DomainConfig>
 ): HTMLElement {
+	/** A configured selector is an explicit override, so it outranks Readability's guess. */
+	const config = resolveDomainConfig(hostname, configs);
+	const configuredEl = config ? (doc.querySelector(config.selector) as HTMLElement | null) : null;
+	if (configuredEl) {
+		return configuredEl.cloneNode(true) as HTMLElement;
+	}
+
 	const documentClone = doc.cloneNode(true) as Document;
 	const article = new Readability(documentClone).parse();
 
@@ -838,16 +874,7 @@ export function getMainElement(
 		return el;
 	}
 
-	let selector = 'main';
-
-	if (configs[hostname]) {
-		selector = configs[hostname].selector;
-	}
-
-	const liveEl =
-		(doc.querySelector(selector) as HTMLElement) ||
-		(doc.querySelector('article, main') as HTMLElement) ||
-		doc.body;
+	const liveEl = (doc.querySelector('article, main') as HTMLElement) || doc.body;
 	return liveEl.cloneNode(true) as HTMLElement;
 }
 
@@ -905,9 +932,16 @@ export function createTurndownService(): TurndownService {
 			if (title) {
 				infoParts.push(`title="${escapeInfoString(title)}"`);
 			}
-			const infoString = infoParts.length > 0 ? ` ${infoParts.join(' ')}` : '';
+			const infoString = infoParts.join(' ');
 
-			return `\n\`\`\`${infoString}\n${trimmedCode}\n\`\`\`\n`;
+			/** Widen the fence past the longest backtick run so code containing fences survives. */
+			const longestBacktickRun = (trimmedCode.match(/`+/g) ?? []).reduce(
+				(longest, run) => Math.max(longest, run.length),
+				0
+			);
+			const fence = '`'.repeat(Math.max(3, longestBacktickRun + 1));
+
+			return `\n${fence}${infoString}\n${trimmedCode}\n${fence}\n`;
 		},
 	});
 
@@ -962,7 +996,7 @@ export interface PageMetadata {
 export function buildFrontMatter(meta: PageMetadata): string {
 	return `---
 title: "${escapeYaml(meta.title)}"
-source: "${meta.source}"
+source: "${escapeYaml(meta.source)}"
 retrieved: "${meta.retrieved}"
 author: "${escapeYaml(meta.author)}"
 description: "${escapeYaml(meta.description)}"
