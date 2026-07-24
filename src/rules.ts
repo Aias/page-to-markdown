@@ -45,6 +45,38 @@ export const defaultDomainConfigs: Record<string, DomainConfig> = {
  */
 export const domainConfigs: Record<string, DomainConfig> = { ...defaultDomainConfigs };
 
+/**
+ * Strips the `www.` prefix so a rule saved for one spelling of a host matches the other.
+ * @param hostname - Hostname to normalize.
+ */
+function normalizeHostname(hostname: string): string {
+	return hostname.toLowerCase().replace(/^www\./, '');
+}
+
+/**
+ * Finds the configuration registered for a hostname, ignoring any `www.` prefix on
+ * either the page or the stored key.
+ * @param hostname - Hostname of the page being converted.
+ * @param configs - Configurations keyed by hostname.
+ */
+export function resolveDomainConfig(
+	hostname: string,
+	configs: Record<string, DomainConfig>
+): DomainConfig | null {
+	const direct = configs[hostname];
+	if (direct) {
+		return direct;
+	}
+
+	const normalized = normalizeHostname(hostname);
+	for (const [key, config] of Object.entries(configs)) {
+		if (normalizeHostname(key) === normalized) {
+			return config;
+		}
+	}
+	return null;
+}
+
 function hasChromeStorage(): boolean {
 	return typeof chrome !== 'undefined' && !!chrome.storage;
 }

@@ -46,6 +46,8 @@ Access the extension options to add custom rules for specific websites:
 2. Add domain-specific CSS selectors for content extraction
 3. Specify elements to remove (e.g., `.ads`, `#comments`)
 
+A configured selector takes precedence over automatic extraction, so reach for one when Readability picks the wrong region of a page. Rules match with or without a leading `www.`.
+
 ## Output Format
 
 ```markdown

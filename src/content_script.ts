@@ -6,7 +6,7 @@ import {
 	getMainElement,
 	stripFrontMatter,
 } from './convert';
-import { domainConfigs, loadCustomConfigs } from './rules';
+import { domainConfigs, loadCustomConfigs, resolveDomainConfig } from './rules';
 
 declare global {
 	interface Window {
@@ -77,8 +77,7 @@ window.convertPageToMarkdown = async () => {
 		await loadCustomConfigs();
 
 		const hostname = window.location.hostname;
-		const domainConfig = domainConfigs[hostname] || {};
-		const removeSelectors = domainConfig.remove || [];
+		const removeSelectors = resolveDomainConfig(hostname, domainConfigs)?.remove || [];
 
 		const mainEl = getMainElement(document, hostname, domainConfigs);
 

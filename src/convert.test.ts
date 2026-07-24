@@ -13,6 +13,7 @@ import {
 	extractLanguage,
 	firstNonEmpty,
 	generateTOC,
+	getMainElement,
 	normalizeLinks,
 	postProcessMarkdown,
 	slugify,
@@ -20,6 +21,7 @@ import {
 	trimFencePadding,
 	unwrapHeadingLinks,
 } from './convert';
+import type { DomainConfig } from './rules';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,6 +57,11 @@ describe('slugify', () => {
 	it('handles empty input', () => {
 		expect(slugify('')).toBe('');
 	});
+
+	it('preserves non-ASCII letters', () => {
+		expect(slugify('Übersicht der Größe')).toBe('übersicht-der-größe');
+		expect(slugify('日本語')).toBe('日本語');
+	});
 });
 
 describe('chooseBestSrcFromSrcset', () => {
@@ -72,6 +79,20 @@ describe('chooseBestSrcFromSrcset', () => {
 
 	it('returns null for empty string', () => {
 		expect(chooseBestSrcFromSrcset('')).toBeNull();
+	});
+
+	it('keeps commas that belong to the URL', () => {
+		expect(
+			chooseBestSrcFromSrcset(
+				'https://cdn.io/w_400,c_fill/a.jpg 400w, https://cdn.io/w_1200,c_fill/a.jpg 1200w'
+			)
+		).toBe('https://cdn.io/w_1200,c_fill/a.jpg');
+	});
+
+	it('parses comma-containing URLs without descriptors', () => {
+		expect(chooseBestSrcFromSrcset('https://cdn.io/w_400,c_fill/a.jpg')).toBe(
+			'https://cdn.io/w_400,c_fill/a.jpg'
+		);
 	});
 });
 
@@ -201,6 +222,30 @@ describe('cleanContent', () => {
 		cleanContent(el, []);
 		expect(el.querySelector('img')).toBeNull();
 	});
+
+	it('keeps whitespace-only spans inside code blocks', () => {
+		const el = html(
+			'<pre><code><span class="line"><span>    </span><span>indented</span></span>' +
+				'<span class="line"></span></code></pre>'
+		);
+		cleanContent(el, []);
+		expect(el.querySelectorAll('span')).toHaveLength(4);
+	});
+
+	it('keeps structural elements that carry no text', () => {
+		const el = html('<p>a<br>b</p><hr><table><tr><td>1</td><td></td></tr></table>');
+		cleanContent(el, []);
+		expect(el.querySelector('br')).not.toBeNull();
+		expect(el.querySelector('hr')).not.toBeNull();
+		expect(el.querySelectorAll('td')).toHaveLength(2);
+	});
+
+	it('does not treat "ad-" as a substring of ordinary class names', () => {
+		const el = html('<div class="read-more">keep</div><div class="ad-slot">drop</div>');
+		cleanContent(el, []);
+		expect(el.querySelector('.read-more')).not.toBeNull();
+		expect(el.querySelector('.ad-slot')).toBeNull();
+	});
 });
 
 describe('normalizeLinks', () => {
@@ -231,6 +276,12 @@ describe('normalizeLinks', () => {
 		normalizeLinks(el);
 		expect(el.querySelector('a')?.getAttribute('href')).toBe('javascript:void(0)');
 	});
+
+	it('keeps ref, which sites use to address content rather than track', () => {
+		const el = html('<a href="https://example.com/blob/x.ts?ref=main">link</a>');
+		normalizeLinks(el);
+		expect(el.querySelector('a')?.getAttribute('href')).toContain('ref=main');
+	});
 });
 
 describe('unwrapHeadingLinks', () => {
@@ -246,6 +297,12 @@ describe('unwrapHeadingLinks', () => {
 		const el = html('<h2><a href="/page">Link</a> <span>extra</span></h2>');
 		unwrapHeadingLinks(el);
 		expect(el.querySelector('h2 a')).not.toBeNull();
+	});
+
+	it('leaves headings with text outside the link alone', () => {
+		const el = html('<h2><a href="/page">Title</a> and more</h2>');
+		unwrapHeadingLinks(el);
+		expect(el.querySelector('h2')?.textContent).toBe('Title and more');
 	});
 });
 
@@ -311,6 +368,16 @@ describe('generateTOC', () => {
 		const toc = generateTOC(el);
 		expect(toc).toContain('#custom-id)');
 	});
+
+	it('escapes brackets in heading text', () => {
+		const el = html('<h2>Using [brackets] here</h2>');
+		expect(generateTOC(el)).toContain('- [Using \\[brackets\\] here](#using-brackets-here)');
+	});
+
+	it('falls back to a slug when heading text yields none', () => {
+		const el = html('<h2>🎉</h2>');
+		expect(generateTOC(el)).toContain('(#section)');
+	});
 });
 
 describe('extractLanguage', () => {
@@ -337,6 +404,44 @@ describe('extractLanguage', () => {
 // High-level pipeline
 // ---------------------------------------------------------------------------
 
+describe('getMainElement', () => {
+	const body = `
+		<div id="custom"><p>Configured region content.</p></div>
+		<article><h1>Readable</h1>${'<p>A long readable article body for extraction to latch onto.</p>'.repeat(10)}</article>
+	`;
+
+	function docWithBody(): Document {
+		const doc = document.implementation.createHTMLDocument('Test');
+		doc.body.innerHTML = body;
+		return doc;
+	}
+
+	it('prefers a configured selector over automatic extraction', () => {
+		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#custom' } };
+		const el = getMainElement(docWithBody(), 'example.com', configs);
+		expect(el.textContent).toContain('Configured region content.');
+		expect(el.textContent).not.toContain('Readable');
+	});
+
+	it('matches a bare-hostname rule from a www. page', () => {
+		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#custom' } };
+		const el = getMainElement(docWithBody(), 'www.example.com', configs);
+		expect(el.textContent).toContain('Configured region content.');
+	});
+
+	it('matches a www. rule from a bare-hostname page', () => {
+		const configs: Record<string, DomainConfig> = { 'www.example.com': { selector: '#custom' } };
+		const el = getMainElement(docWithBody(), 'example.com', configs);
+		expect(el.textContent).toContain('Configured region content.');
+	});
+
+	it('falls back to extraction when the configured selector matches nothing', () => {
+		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#missing' } };
+		const el = getMainElement(docWithBody(), 'example.com', configs);
+		expect(el.textContent).toContain('Readable');
+	});
+});
+
 describe('buildFrontMatter', () => {
 	it('produces valid YAML front matter', () => {
 		const fm = buildFrontMatter({
@@ -350,6 +455,17 @@ describe('buildFrontMatter', () => {
 		expect(fm).toContain('title: "Test \\"Title\\""');
 		expect(fm).toContain('source: "https://example.com"');
 		expect(fm).toContain('author: "Jane"');
+	});
+
+	it('escapes the source URL', () => {
+		const fm = buildFrontMatter({
+			title: 'T',
+			source: 'https://example.com/a"b',
+			author: '',
+			description: '',
+			retrieved: '2025-01-01T00:00:00.000Z',
+		});
+		expect(fm).toContain('source: "https://example.com/a\\"b"');
 	});
 });
 
@@ -408,6 +524,42 @@ describe('convertToMarkdown', () => {
 		const result = convertToMarkdown(el, []);
 		expect(result.markdown).toContain('| A | B |');
 		expect(result.markdown).toContain('| 1 | 2 |');
+	});
+
+	it('preserves indentation and blank lines in highlighted code', () => {
+		const el = html(
+			'<pre><code class="language-py">' +
+				'<span class="line"><span>def f():</span></span>\n' +
+				'<span class="line"><span>    </span><span>return 1</span></span>\n' +
+				'<span class="line"></span>\n' +
+				'<span class="line"><span>f()</span></span>' +
+				'</code></pre>'
+		);
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toBe('```py\ndef f():\n    return 1\n\nf()\n```');
+	});
+
+	it('widens the fence around code containing backticks', () => {
+		const el = html('<pre><code class="language-md">Use ```js for JS fences</code></pre>');
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toBe('````md\nUse ```js for JS fences\n````');
+	});
+
+	it('keeps empty table cells so columns stay aligned', () => {
+		const el = html(
+			'<table><thead><tr><th>A</th><th>B</th></tr></thead>' +
+				'<tbody><tr><td>1</td><td></td></tr></tbody></table>'
+		);
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toBe('| A | B |\n| --- | --- |\n| 1 |  |');
+	});
+
+	it('preserves line breaks, rules, and task list checkboxes', () => {
+		const el = html('<p>one<br>two</p><hr><ul><li><input type="checkbox" checked>done</li></ul>');
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toContain('one\ntwo');
+		expect(result.markdown).toContain('* * *');
+		expect(result.markdown).toContain('[x] done');
 	});
 
 	it('replaces embedded media with descriptions', () => {
