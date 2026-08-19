@@ -3,7 +3,7 @@ import {
 	buildFrontMatter,
 	buildOutput,
 	convertToMarkdown,
-	getMainElement,
+	extractMainContent,
 	stripFrontMatter,
 } from './convert';
 import { domainConfigs, loadCustomConfigs, resolveDomainConfig } from './rules';
@@ -47,12 +47,15 @@ async function fetchCanonicalMarkdown(): Promise<string | null> {
  */
 async function copyToClipboard(text: string): Promise<boolean> {
 	try {
-		/** Try the modern clipboard API first. */
+		/**
+		 * writeText requires document.hasFocus(); it fails when focus sits in
+		 * browser UI (toolbar click) or DevTools, and the fallback covers those.
+		 */
 		await navigator.clipboard.writeText(text);
 		return true;
-	} catch (_err) {
+	} catch (err) {
 		/** Fallback to the deprecated execCommand path when necessary. */
-		console.log('Falling back to execCommand for clipboard');
+		console.warn('navigator.clipboard.writeText failed, falling back to execCommand:', err);
 		const textarea = document.createElement('textarea');
 		textarea.value = text;
 		textarea.style.position = 'fixed';
@@ -79,14 +82,16 @@ window.convertPageToMarkdown = async () => {
 		const hostname = window.location.hostname;
 		const removeSelectors = resolveDomainConfig(hostname, domainConfigs)?.remove || [];
 
-		const mainEl = getMainElement(document, hostname, domainConfigs);
+		const extracted = extractMainContent(document, hostname, domainConfigs);
+		const mainEl = extracted.element;
 
 		const title = document.title || '';
 		const url = document.location.href || '';
+		/** Page meta tags win; extraction-derived metadata fills the gaps. */
 		const descriptionMeta = document.querySelector('meta[name="description"]');
-		const description = descriptionMeta?.getAttribute('content') || '';
+		const description = descriptionMeta?.getAttribute('content') || extracted.description;
 		const authorMeta = document.querySelector('meta[name="author"]');
-		const author = authorMeta?.getAttribute('content') || '';
+		const author = authorMeta?.getAttribute('content') || extracted.author;
 		const retrievalDate = new Date().toISOString();
 
 		let canonicalContent: string | null = null;

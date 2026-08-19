@@ -11,9 +11,9 @@ import {
 	escapeInfoString,
 	escapeYaml,
 	extractLanguage,
+	extractMainContent,
 	firstNonEmpty,
 	generateTOC,
-	getMainElement,
 	normalizeLinks,
 	postProcessMarkdown,
 	slugify,
@@ -404,7 +404,7 @@ describe('extractLanguage', () => {
 // High-level pipeline
 // ---------------------------------------------------------------------------
 
-describe('getMainElement', () => {
+describe('extractMainContent', () => {
 	const body = `
 		<div id="custom"><p>Configured region content.</p></div>
 		<article><h1>Readable</h1>${'<p>A long readable article body for extraction to latch onto.</p>'.repeat(10)}</article>
@@ -418,27 +418,39 @@ describe('getMainElement', () => {
 
 	it('prefers a configured selector over automatic extraction', () => {
 		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#custom' } };
-		const el = getMainElement(docWithBody(), 'example.com', configs);
-		expect(el.textContent).toContain('Configured region content.');
-		expect(el.textContent).not.toContain('Readable');
+		const { element } = extractMainContent(docWithBody(), 'example.com', configs);
+		expect(element.textContent).toContain('Configured region content.');
+		expect(element.textContent).not.toContain('Readable');
 	});
 
 	it('matches a bare-hostname rule from a www. page', () => {
 		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#custom' } };
-		const el = getMainElement(docWithBody(), 'www.example.com', configs);
-		expect(el.textContent).toContain('Configured region content.');
+		const { element } = extractMainContent(docWithBody(), 'www.example.com', configs);
+		expect(element.textContent).toContain('Configured region content.');
 	});
 
 	it('matches a www. rule from a bare-hostname page', () => {
 		const configs: Record<string, DomainConfig> = { 'www.example.com': { selector: '#custom' } };
-		const el = getMainElement(docWithBody(), 'example.com', configs);
-		expect(el.textContent).toContain('Configured region content.');
+		const { element } = extractMainContent(docWithBody(), 'example.com', configs);
+		expect(element.textContent).toContain('Configured region content.');
 	});
 
 	it('falls back to extraction when the configured selector matches nothing', () => {
 		const configs: Record<string, DomainConfig> = { 'example.com': { selector: '#missing' } };
-		const el = getMainElement(docWithBody(), 'example.com', configs);
-		expect(el.textContent).toContain('Readable');
+		const { element } = extractMainContent(docWithBody(), 'example.com', configs);
+		expect(element.textContent).toContain('Readable');
+	});
+
+	it('surfaces author and description metadata from extraction', () => {
+		const doc = document.implementation.createHTMLDocument('Test');
+		doc.head.innerHTML = `
+			<meta name="author" content="Jane Writer" />
+			<meta name="description" content="A page about extraction." />
+		`;
+		doc.body.innerHTML = body;
+		const { author, description } = extractMainContent(doc, 'example.org', {});
+		expect(author).toBe('Jane Writer');
+		expect(description).toBe('A page about extraction.');
 	});
 });
 
@@ -569,5 +581,36 @@ describe('convertToMarkdown', () => {
 		const result = convertToMarkdown(el, []);
 		expect(result.markdown).toContain('Embedded iframe');
 		expect(result.markdown).not.toContain('<iframe');
+	});
+
+	it('keeps code blocks wrapped in figures', () => {
+		const el = html(
+			'<p>Before</p><figure><pre data-language="jsx"><code>const x = 1;</code></pre></figure><p>After</p>'
+		);
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toContain('```jsx\nconst x = 1;\n```');
+	});
+
+	it('renders image figures with captions', () => {
+		const el = html(
+			'<figure><img src="https://example.com/pic.png" alt="Pic" /><figcaption>A caption</figcaption></figure>'
+		);
+		const result = convertToMarkdown(el, []);
+		expect(result.markdown).toContain('![Pic](https://example.com/pic.png)');
+		expect(result.markdown).toContain('_A caption_');
+	});
+
+	it('resolves footnote definitions from the document when absent from the content', () => {
+		const definitions = document.createElement('div');
+		definitions.innerHTML = '<ol><li id="fn-outside"><p>External definition text.</p></li></ol>';
+		document.body.appendChild(definitions);
+		try {
+			const el = html('<p>Claim<sup><a href="#fn-outside">1</a></sup></p>');
+			const result = convertToMarkdown(el, []);
+			expect(result.markdown).toContain('Claim[^1]');
+			expect(result.markdown).toContain('[^1]: External definition text.');
+		} finally {
+			definitions.remove();
+		}
 	});
 });

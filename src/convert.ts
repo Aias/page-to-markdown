@@ -1,4 +1,4 @@
-import { Readability } from '@mozilla/readability';
+import Defuddle from 'defuddle';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import * as TurndownPluginGfm from 'turndown-plugin-gfm';
@@ -626,12 +626,17 @@ export function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 			idToLabel.set(targetId, labelCandidate);
 
 			const selector = `#${escapeId(targetId)}`;
-			const definition = el.querySelector(selector) as HTMLElement | null;
+			const internalDefinition = el.querySelector(selector) as HTMLElement | null;
+			/**
+			 * Extraction may exclude the reference list (footers, separate sections),
+			 * so definitions missing from the content are looked up in the document.
+			 */
+			const definition = internalDefinition ?? el.ownerDocument.getElementById(targetId);
 			if (definition) {
 				const definitionClone = definition.cloneNode(true) as HTMLElement;
 				definitionClone
 					.querySelectorAll(
-						'a[role="doc-backlink"], a[href^="#fnref"], a[href^="#ref"], .footnote-backref'
+						'a[role="doc-backlink"], a[href^="#fnref"], a[href^="#ref"], .footnote-backref, .mw-cite-backlink'
 					)
 					.forEach((backref) => {
 						backref.remove();
@@ -642,10 +647,13 @@ export function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 					idToHtml.set(targetId, sanitized);
 				}
 
-				const parent = definition.parentElement;
-				definition.remove();
-				if (parent && parent.children.length === 0 && /^(ol|ul)$/i.test(parent.tagName)) {
-					parent.remove();
+				/** Only definitions inside the extracted content are removed; the live document stays untouched. */
+				if (internalDefinition) {
+					const parent = internalDefinition.parentElement;
+					internalDefinition.remove();
+					if (parent && parent.children.length === 0 && /^(ol|ul)$/i.test(parent.tagName)) {
+						parent.remove();
+					}
 				}
 			}
 		}
@@ -654,6 +662,17 @@ export function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 	};
 
 	const processedNodes = new Set<Node>();
+
+	/**
+	 * Markers become elements handled by a Turndown rule rather than text nodes,
+	 * because Turndown escapes brackets in text and `\[^1\]` is not a working reference.
+	 */
+	const createMarker = (doc: Document, label: string): HTMLElement => {
+		const marker = doc.createElement('sup');
+		marker.dataset.footnoteRef = label;
+		marker.textContent = `[^${label}]`;
+		return marker;
+	};
 
 	const supNodes = Array.from(el.querySelectorAll('sup'));
 	supNodes.forEach((sup) => {
@@ -666,8 +685,7 @@ export function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 		if (!label) {
 			return;
 		}
-		const replacement = sup.ownerDocument.createTextNode(`[^${label}]`);
-		sup.replaceWith(replacement);
+		sup.replaceWith(createMarker(sup.ownerDocument, label));
 		processedNodes.add(anchor);
 		processedNodes.add(sup);
 	});
@@ -690,8 +708,7 @@ export function convertFootnotes(el: HTMLElement): FootnoteDefinition[] {
 		if (!label) {
 			return;
 		}
-		const replacement = anchor.ownerDocument.createTextNode(`[^${label}]`);
-		anchor.replaceWith(replacement);
+		anchor.replaceWith(createMarker(anchor.ownerDocument, label));
 		processedNodes.add(anchor);
 	});
 
@@ -847,35 +864,49 @@ export function extractTitle(
 // Article extraction
 // ---------------------------------------------------------------------------
 
+export interface ExtractedContent {
+	element: HTMLElement;
+	author: string;
+	description: string;
+}
+
 /**
- * Attempts to locate the primary article element using Readability, falling back to heuristics.
+ * Locates the primary article element using Defuddle, falling back to heuristics,
+ * and surfaces page metadata discovered during extraction.
+ *
+ * Defuddle runs with `standardize: false`: its extraction, clutter removal, and
+ * site-specific extractors apply, while markup is left untouched so heading IDs,
+ * inline formatting, and code-block metadata survive for the Markdown rules here.
  * @param doc - Document instance to evaluate.
  * @param hostname - Current page hostname for domain config lookup.
  * @param configs - Merged domain configurations keyed by hostname.
  */
-export function getMainElement(
+export function extractMainContent(
 	doc: Document,
 	hostname: string,
 	configs: Record<string, DomainConfig>
-): HTMLElement {
-	/** A configured selector is an explicit override, so it outranks Readability's guess. */
+): ExtractedContent {
+	/** A configured selector is an explicit override, so it outranks automatic extraction. */
 	const config = resolveDomainConfig(hostname, configs);
 	const configuredEl = config ? (doc.querySelector(config.selector) as HTMLElement | null) : null;
 	if (configuredEl) {
-		return configuredEl.cloneNode(true) as HTMLElement;
+		return { element: configuredEl.cloneNode(true) as HTMLElement, author: '', description: '' };
 	}
 
-	const documentClone = doc.cloneNode(true) as Document;
-	const article = new Readability(documentClone).parse();
+	const result = new Defuddle(doc, { standardize: false }).parse();
 
-	if (article?.content) {
+	if (result.content) {
 		const el = doc.createElement('div');
-		el.innerHTML = DOMPurify.sanitize(article.content);
-		return el;
+		el.innerHTML = DOMPurify.sanitize(result.content);
+		return { element: el, author: result.author, description: result.description };
 	}
 
 	const liveEl = (doc.querySelector('article, main') as HTMLElement) || doc.body;
-	return liveEl.cloneNode(true) as HTMLElement;
+	return {
+		element: liveEl.cloneNode(true) as HTMLElement,
+		author: result.author,
+		description: result.description,
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -896,6 +927,11 @@ export function createTurndownService(): TurndownService {
 	});
 
 	service.use(TurndownPluginGfm.gfm);
+
+	service.addRule('footnoteRefs', {
+		filter: (node) => node.nodeName === 'SUP' && !!(node as HTMLElement).dataset.footnoteRef,
+		replacement: (_, node) => `[^${(node as HTMLElement).dataset.footnoteRef}]`,
+	});
 
 	service.addRule('headingsWithIds', {
 		filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
@@ -947,11 +983,12 @@ export function createTurndownService(): TurndownService {
 
 	service.addRule('figureWithCaption', {
 		filter: (node) => node.nodeName === 'FIGURE',
-		replacement: (_, node) => {
+		replacement: (content, node) => {
 			const figure = node as HTMLElement;
 			const images = Array.from(figure.querySelectorAll('img'));
 			if (images.length === 0) {
-				return '\n\n';
+				/** Figures without images (code blocks, tables, quotes) keep their converted content. */
+				return `\n\n${content.trim()}\n\n`;
 			}
 
 			const imageMarkdown = images
