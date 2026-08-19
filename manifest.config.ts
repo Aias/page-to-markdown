@@ -35,8 +35,7 @@ export default defineManifest({
 	commands: {
 		'convert-to-markdown': {
 			suggested_key: {
-				default: 'Ctrl+Shift+M',
-				mac: 'Command+Shift+M',
+				default: 'Alt+Shift+M',
 			},
 			description: 'Convert current page to Markdown',
 		},
