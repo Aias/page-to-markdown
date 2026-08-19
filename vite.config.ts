@@ -3,13 +3,13 @@ import { crx } from '@crxjs/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
-import manifest from './manifest.config';
+import manifest from './manifest.config.ts';
 
 export default defineConfig({
 	plugins: [react(), tailwindcss(), crx({ manifest })],
 	resolve: {
 		alias: {
-			'@': path.resolve(__dirname, './src'),
+			'@': path.resolve(import.meta.dirname, './src'),
 		},
 	},
 	build: {
