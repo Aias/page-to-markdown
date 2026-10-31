@@ -21,6 +21,11 @@
 			"tailwindDirectives": true
 		}
 	},
+	"markdown": {
+		"formatter": {
+			"formatEmbeds": false
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
